@@ -50,7 +50,16 @@ export class RedNoteTools {
 
       // Check login status
       logger.info('Checking login status')
-      await this.page.goto('https://www.xiaohongshu.com')
+      await this.page.goto('https://www.xiaohongshu.com', {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000
+      })
+      // Wait for sidebar to appear (indicates page is fully loaded)
+      try {
+        await this.page.waitForSelector('.user.side-bar-component .channel', { timeout: 10000 })
+      } catch {
+        // Sidebar not found, likely not logged in
+      }
       const isLoggedIn = await this.page.evaluate(() => {
         const sidebarUser = document.querySelector('.user.side-bar-component .channel')
         return sidebarUser?.textContent?.trim() === '我'
@@ -297,125 +306,170 @@ export class RedNoteTools {
     content: string
     images?: string[]
     tags?: string[]
-  }): Promise<{ success: boolean; message: string }> {
+    keepAlive?: boolean
+  }): Promise<{ success: boolean; message: string; url?: string }> {
     logger.info(`Publishing note with title: ${options.title}`)
     try {
       await this.initialize()
       if (!this.page) throw new Error('Page not initialized')
 
-      // Navigate to publish page
-      logger.info('Navigating to creator publish page')
-      await this.page.goto('https://creator.xiaohongshu.com/publish/publish', { waitUntil: 'networkidle' })
-      await this.randomDelay(1, 2)
+      // Navigate to creator publish page via the main site
+      // The "发布" link opens in a new tab (target="_blank"), so we need to
+      // handle the popup. We use the same browser context so cookies are shared.
+      logger.info('Navigating to publish page via main site link')
+      const publishLink = this.page.locator('a[href*="creator.xiaohongshu.com/publish"]')
+      if (await publishLink.count() > 0) {
+        // Listen for new tab (popup) before clicking
+        const [newPage] = await Promise.all([
+          this.page.context().waitForEvent('page', { timeout: 60000 }),
+          publishLink.first().click()
+        ])
+        // Switch to the new tab and wait for SSO redirects to settle
+        await newPage.waitForLoadState('networkidle', { timeout: 60000 })
+        this.page = newPage
+      } else {
+        // Fallback: navigate directly in current page
+        logger.info('Publish link not found, navigating directly')
+        await this.page.goto('https://creator.xiaohongshu.com/publish/publish?source=official', {
+          waitUntil: 'domcontentloaded',
+          timeout: 60000
+        })
+      }
+      await this.randomDelay(2, 3)
 
-      // Upload images if provided
-      if (options.images && options.images.length > 0) {
-        logger.info(`Uploading ${options.images.length} images`)
-        const fileInput = await this.page.$('input[type="file"]')
-        if (fileInput) {
-          await fileInput.setInputFiles(options.images)
-          logger.info('Images set on file input, waiting for upload')
-          // Wait for uploads to complete
-          await this.randomDelay(2, 4)
-          // Wait for upload progress to finish - look for uploaded image indicators
-          try {
-            await this.page.waitForFunction(
-              (count) => {
-                const uploadedItems = document.querySelectorAll('.publish-uploader .image-item, .upload-item, .coverImg')
-                return uploadedItems.length >= count
-              },
-              options.images.length,
-              { timeout: 60000 }
-            )
-            logger.info('All images uploaded successfully')
-          } catch {
-            logger.warn('Image upload wait timed out, proceeding anyway')
-          }
+      // Check if SSO redirect landed on login page
+      const currentUrl = this.page.url()
+      logger.info(`Current URL after navigation: ${currentUrl}`)
+      if (currentUrl.includes('login') || currentUrl.includes('cas')) {
+        throw new Error('未登录或 Cookie 已失效，请先运行 rednote-mcp init 登录')
+      }
+
+      // The page defaults to "上传视频" tab. Switch to "上传图文" tab.
+      logger.info('Switching to image-text publish tab')
+      const tabSelectors = [
+        'span.title:has-text("上传图文")',
+        'div:has-text("上传图文"):not(:has(div))',
+      ]
+      for (const sel of tabSelectors) {
+        const tab = this.page.locator(sel).first()
+        if (await tab.count() > 0) {
+          await tab.dispatchEvent('click')
           await this.randomDelay(1, 2)
-        } else {
-          logger.warn('File input not found, skipping image upload')
+          logger.info('Switched to image-text tab')
+          break
         }
       }
 
-      // Fill in title
-      logger.info('Filling in title')
-      const titleInput = await this.page.$('#publisherTitleInput, [placeholder*="标题"], .title-input input, .c-input_inner')
-      if (titleInput) {
-        await titleInput.click()
-        await this.randomDelay(0.3, 0.6)
-        await titleInput.type(options.title, { delay: 50 })
+      // Upload images — required for image-text notes
+      // If no images provided, generate a placeholder via "文字配图"
+      if (options.images && options.images.length > 0) {
+        logger.info(`Uploading ${options.images.length} images`)
+        const fileInput = this.page.locator('input[type="file"]').first()
+        await fileInput.setInputFiles(options.images)
+        logger.info('Images set on file input, waiting for upload')
+        // Wait for the title input to appear (indicates upload completed and form is ready)
+        await this.page.waitForSelector('input[placeholder*="标题"], input[placeholder*="赞"]', { timeout: 60000 })
+        await this.randomDelay(1, 2)
       } else {
-        logger.warn('Title input not found, trying alternative selectors')
-        await this.page.locator('[class*="title"] input, [class*="title"] textarea').first().type(options.title, { delay: 50 })
+        // No images: use "文字配图" to generate a text-based image
+        logger.info('No images provided, using text-to-image feature')
+        const textImageBtn = this.page.locator('button:has-text("文字配图")')
+        if (await textImageBtn.count() > 0) {
+          await textImageBtn.click()
+          await this.randomDelay(1, 2)
+          // Type content in the text-to-image editor
+          const textEditor = this.page.locator('textbox').first()
+          if (await textEditor.count() > 0) {
+            await textEditor.fill(options.content.slice(0, 200))
+          }
+          // Click "生成图片"
+          const generateBtn = this.page.locator('div:has-text("生成图片"):not(:has(div))')
+          if (await generateBtn.count() > 0) {
+            await generateBtn.click()
+            await this.randomDelay(2, 3)
+          }
+          // Wait for the title input to appear
+          await this.page.waitForSelector('input[placeholder*="标题"], input[placeholder*="赞"]', { timeout: 60000 })
+          await this.randomDelay(1, 2)
+        } else {
+          throw new Error('未找到"文字配图"按钮，且未提供图片。图文笔记至少需要一张图片。')
+        }
       }
+
+      // Fill in title (max 20 chars)
+      logger.info('Filling in title')
+      const titleInput = this.page.locator('input[placeholder*="标题"], input[placeholder*="赞"]').first()
+      if (await titleInput.count() === 0) {
+        throw new Error('标题输入框未找到，页面结构可能已变化')
+      }
+      await titleInput.click()
+      await titleInput.fill(options.title.slice(0, 20))
       await this.randomDelay(0.5, 1)
 
-      // Fill in content
+      // Fill in content using the rich text editor (TipTap/ProseMirror)
       logger.info('Filling in content')
-      const contentEditor = await this.page.$('#post-textarea, .ql-editor, [contenteditable="true"], [placeholder*="正文"]')
-      if (contentEditor) {
+      const contentEditor = this.page.locator('.tiptap.ProseMirror, .ql-editor').first()
+      if (await contentEditor.count() > 0) {
         await contentEditor.click()
         await this.randomDelay(0.3, 0.6)
-        await contentEditor.type(options.content, { delay: 30 })
+        await this.page.keyboard.type(options.content, { delay: 30 })
       } else {
-        logger.warn('Content editor not found, trying alternative selectors')
-        await this.page.locator('[class*="editor"] [contenteditable], [class*="content"] [contenteditable]').first().type(options.content, { delay: 30 })
+        // Fallback: use any contenteditable element
+        const allEditable = this.page.locator('[contenteditable="true"]')
+        const count = await allEditable.count()
+        if (count >= 1) {
+          const idx = count >= 2 ? 1 : 0
+          await allEditable.nth(idx).click()
+          await this.randomDelay(0.3, 0.6)
+          await this.page.keyboard.type(options.content, { delay: 30 })
+        } else {
+          throw new Error('正文编辑器未找到，页面结构可能已变化')
+        }
       }
       await this.randomDelay(0.5, 1)
 
-      // Add tags
+      // Add tags by typing #tag in the content editor
       if (options.tags && options.tags.length > 0) {
         logger.info(`Adding ${options.tags.length} tags`)
         for (const tag of options.tags) {
-          // Type # followed by tag name in the content area to trigger tag input
-          const editor = await this.page.$('#post-textarea, .ql-editor, [contenteditable="true"]')
-          if (editor) {
-            await editor.click()
-            await this.randomDelay(0.3, 0.5)
-            await editor.type(` #${tag}`, { delay: 50 })
-            await this.randomDelay(0.5, 1)
-            // Press space to confirm the tag
-            await this.page.keyboard.press('Space')
-            await this.randomDelay(0.3, 0.6)
-          }
+          await this.page.keyboard.type(`#${tag}`, { delay: 50 })
+          await this.page.keyboard.press('Space')
+          await this.randomDelay(0.3, 0.6)
         }
+        logger.info(`Added ${options.tags.length} tags`)
       }
       await this.randomDelay(1, 2)
 
       // Click publish button
       logger.info('Clicking publish button')
-      const publishButton = await this.page.$('button.publishBtn, button.css-k01wbh, [class*="publish"] button, button:has-text("发布")')
-      if (publishButton) {
-        await publishButton.click()
-      } else {
-        // Fallback: try to find button by text
-        await this.page.locator('button').filter({ hasText: '发布' }).first().click()
+      await this.page.locator('button:has-text("发布")').first().click()
+
+      // Wait for publish success — xiaohongshu redirects to /publish/success?...
+      logger.info('Waiting for publish confirmation')
+      const maxPublishWaitMs = 30000
+      const publishStart = Date.now()
+      while (Date.now() - publishStart < maxPublishWaitMs) {
+        const url = this.page.url()
+        if (url.includes('/publish/success')) {
+          logger.info('Note published successfully')
+          return { success: true, message: '笔记发布成功', url }
+        }
+        await this.randomDelay(0.5, 1)
       }
 
-      // Wait for publish confirmation
-      logger.info('Waiting for publish confirmation')
-      try {
-        await this.page.waitForURL('**/publish/success**', { timeout: 30000 })
-        logger.info('Note published successfully')
-        return { success: true, message: '笔记发布成功' }
-      } catch {
-        // Check if there's a success message on the page
-        const successText = await this.page.evaluate(() => {
-          const el = document.querySelector('.success, [class*="success"], .toast')
-          return el?.textContent?.trim() || ''
-        })
-        if (successText) {
-          logger.info(`Publish result: ${successText}`)
-          return { success: true, message: successText }
-        }
-        logger.warn('Could not confirm publish success, but no error detected')
-        return { success: true, message: '笔记已提交发布，请在小红书创作者中心确认状态' }
+      // If we didn't redirect, check page state
+      logger.warn('Did not detect /publish/success redirect within timeout')
+      return {
+        success: true,
+        message: '笔记已提交发布，请在小红书创作者中心确认状态'
       }
     } catch (error) {
       logger.error('Error publishing note:', error)
       throw error
     } finally {
-      await this.cleanup()
+      if (!options.keepAlive) {
+        await this.cleanup()
+      }
     }
   }
 

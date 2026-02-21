@@ -115,16 +115,17 @@ server.tool(
   'publish_note',
   '发布小红书笔记（图文或纯文字）',
   {
-    title: z.string().describe('笔记标题'),
+    title: z.string().describe('笔记标题（最多20字）'),
     content: z.string().describe('笔记正文'),
     images: z.array(z.string()).optional().describe('图片文件路径数组（本地绝对路径）'),
-    tags: z.array(z.string()).optional().describe('标签/话题数组')
+    tags: z.array(z.string()).optional().describe('标签/话题数组'),
+    keepAlive: z.boolean().optional().describe('发布后是否保持浏览器打开（用于连续发布多篇笔记）')
   },
-  async ({ title, content, images, tags }: { title: string; content: string; images?: string[]; tags?: string[] }) => {
+  async ({ title, content, images, tags, keepAlive }: { title: string; content: string; images?: string[]; tags?: string[]; keepAlive?: boolean }) => {
     logger.info(`Publishing note: ${title}`)
     try {
       const tools = new RedNoteTools()
-      const result = await tools.publishNote({ title, content, images, tags })
+      const result = await tools.publishNote({ title, content, images, tags, keepAlive })
       logger.info(`Publish result: ${result.message}`)
       return {
         content: [

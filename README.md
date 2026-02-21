@@ -49,6 +49,7 @@ npm run dev -- init
 - 关键词搜索笔记
 - 命令行初始化工具
 - 通过 URL 访问笔记内容
+- 发布图文/纯文字笔记
 - [ ] 通过 URL 访问评论内容
 
 ## 使用说明
@@ -71,7 +72,31 @@ npm run dev -- init
 3. 请手动完成登录操作
 4. 登录成功后会自动保存 Cookie 到 `~/.mcp/rednote/cookies.json` 文件
 
-### 2. 在 Cursor 中配置 MCP Server
+### 2. 发布笔记
+
+通过 MCP tool `publish_note` 发布小红书笔记：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `title` | string | ✅ | 笔记标题（最多20字） |
+| `content` | string | ✅ | 笔记正文 |
+| `images` | string[] | ❌ | 图片文件路径数组（本地绝对路径） |
+| `tags` | string[] | ❌ | 标签/话题数组 |
+| `keepAlive` | boolean | ❌ | 发布后保持浏览器打开（连续发布多篇时使用） |
+
+示例（在支持 MCP 的客户端中）：
+
+```
+帮我发布一篇小红书笔记：
+标题：今日份咖啡分享
+正文：在家用摩卡壶做了一杯拿铁，拉花居然成功了！
+图片：/Users/me/photos/coffee.jpg
+标签：咖啡, 拿铁, 居家咖啡
+```
+
+> ⚠️ 发布前请确保已通过 `rednote-mcp init` 完成登录。
+
+### 3. 在 Cursor 中配置 MCP Server
 
 在 Cursor 的 settings.json 中添加以下配置：
 
