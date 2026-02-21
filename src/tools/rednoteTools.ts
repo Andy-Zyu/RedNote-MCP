@@ -21,6 +21,81 @@ export interface Comment {
   time: string
 }
 
+export interface DiagnosisItem {
+  value: number | string
+  suggestion: string
+}
+
+export interface MetricItem {
+  value: number | string
+  change: string
+}
+
+export interface DashboardOverview {
+  period: string
+  dateRange: string
+  diagnosis: {
+    views: DiagnosisItem
+    newFollowers: DiagnosisItem
+    profileVisitors: DiagnosisItem
+    publishCount: DiagnosisItem
+    interactions: DiagnosisItem
+  }
+  overview: {
+    impressions: MetricItem
+    views: MetricItem
+    coverClickRate: MetricItem
+    avgViewDuration: MetricItem
+    totalViewDuration: MetricItem
+    videoCompletionRate: MetricItem
+  }
+  interactions: {
+    likes: MetricItem
+    comments: MetricItem
+    collects: MetricItem
+    shares: MetricItem
+  }
+  followers: {
+    netGain: MetricItem
+    newFollows: MetricItem
+    unfollows: MetricItem
+    profileVisitors: MetricItem
+  }
+}
+
+export interface NoteAnalytics {
+  title: string
+  publishTime: string
+  impressions: string
+  views: string
+  coverClickRate: string
+  likes: string
+  comments: string
+  collects: string
+  newFollowers: string
+  shares: string
+  avgViewDuration: string
+  danmaku: string
+}
+
+export interface ContentAnalytics {
+  notes: NoteAnalytics[]
+  totalCount: number
+}
+
+export interface FansOverview {
+  totalFans: number | string
+  newFans: number | string
+  lostFans: number | string
+}
+
+export interface FansAnalytics {
+  period: string
+  overview: FansOverview
+  portrait: string | null
+  activeFans: string[]
+}
+
 export class RedNoteTools {
   private authManager: AuthManager
   private browser: Browser | null = null
@@ -470,6 +545,367 @@ export class RedNoteTools {
       if (!options.keepAlive) {
         await this.cleanup()
       }
+    }
+  }
+
+  /**
+   * Navigate to creator center via SSO from the main site.
+   * After initialize(), cookies are loaded for www.xiaohongshu.com.
+   * creator.xiaohongshu.com requires SSO, so we click the "发布" link
+   * (which opens a new tab with SSO redirect), then navigate to the target path.
+   */
+  private async navigateToCreatorCenter(targetPath: string): Promise<void> {
+    if (!this.page) throw new Error('Page not initialized')
+
+    // Use the "发布" link to trigger SSO (same approach as publishNote)
+    const publishLink = this.page.locator('a[href*="creator.xiaohongshu.com/publish"]')
+    if (await publishLink.count() > 0) {
+      const [newPage] = await Promise.all([
+        this.page.context().waitForEvent('page', { timeout: 60000 }),
+        publishLink.first().click()
+      ])
+      await newPage.waitForLoadState('networkidle', { timeout: 60000 })
+      this.page = newPage
+    }
+
+    // Navigate to the target path
+    const sidebarLink = this.page.locator(`a[href*="${targetPath}"]`).first()
+    if (await sidebarLink.count() > 0) {
+      await sidebarLink.click()
+      await this.page.waitForLoadState('networkidle', { timeout: 60000 })
+    } else {
+      await this.page.evaluate((path: string) => {
+        window.location.href = `https://creator.xiaohongshu.com${path}`
+      }, targetPath)
+      await this.page.waitForLoadState('networkidle', { timeout: 60000 })
+    }
+    await this.randomDelay(1, 2)
+
+    // Check if we got redirected to login
+    const currentUrl = this.page.url()
+    if (currentUrl.includes('login') || currentUrl.includes('cas')) {
+      throw new Error('未登录或 Cookie 已失效，请先运行 login 工具登录')
+    }
+  }
+
+  async getDashboardOverview(period: string = '7days'): Promise<DashboardOverview> {
+    logger.info(`Getting dashboard overview for period: ${period}`)
+    try {
+      await this.initialize()
+      if (!this.page) throw new Error('Page not initialized')
+
+      await this.navigateToCreatorCenter('/statistics/account/v2')
+      // Wait for the dashboard content to render
+      await this.page.waitForSelector('text=账号诊断', { timeout: 30000 })
+      await this.randomDelay(2, 3)
+
+      // Switch to 30 days if requested
+      if (period === '30days') {
+        const btn30 = this.page.locator('text=近30日').first()
+        if (await btn30.count() > 0) {
+          await btn30.click()
+          await this.randomDelay(2, 3)
+        }
+      }
+
+      // Helper to extract visible metrics from the current tab
+      const extractVisibleMetrics = async (): Promise<Record<string, { value: string; change: string }>> => {
+        return await this.page!.evaluate(() => {
+          const getText = (el: Element | null): string => el?.textContent?.trim() || ''
+          const allDivs = Array.from(document.querySelectorAll('div'))
+          const metrics: Record<string, { value: string; change: string }> = {}
+          const knownLabels = [
+            '曝光数', '观看数', '封面点击率', '平均观看时长', '观看总时长', '视频完播率',
+            '点赞数', '评论数', '收藏数', '分享数',
+            '净涨粉', '新增关注', '取消关注', '主页访客'
+          ]
+          for (const label of knownLabels) {
+            const labelEl = allDivs.find(el => el.childElementCount === 0 && getText(el) === label)
+            if (labelEl && labelEl.parentElement) {
+              const children = Array.from(labelEl.parentElement.children)
+              const idx = children.indexOf(labelEl)
+              metrics[label] = {
+                value: children[idx + 1] ? getText(children[idx + 1]) : '0',
+                change: children[idx + 2] ? getText(children[idx + 2]) : '-'
+              }
+            }
+          }
+          return metrics
+        })
+      }
+
+      // Extract diagnosis and date range (always visible)
+      const baseData = await this.page.evaluate(() => {
+        const getText = (el: Element | null): string => el?.textContent?.trim() || ''
+        const allDivs = Array.from(document.querySelectorAll('div'))
+
+        // Diagnosis
+        const diagnosisItems: { value: string; suggestion: string }[] = []
+        const diagLabels = ['观看数：', '涨粉数：', '主页访客数：', '发布数：', '互动数：']
+        for (const label of diagLabels) {
+          const labelEl = allDivs.find(el => el.childElementCount === 0 && getText(el) === label)
+          if (labelEl && labelEl.parentElement) {
+            const siblings = Array.from(labelEl.parentElement.children)
+            const suggestionEl = siblings.find(s => s !== labelEl)
+            const suggestion = suggestionEl ? getText(suggestionEl) : ''
+            const match = suggestion.match(/为\s*(\d+)/)
+            diagnosisItems.push({ value: match ? match[1] : '0', suggestion })
+          } else {
+            diagnosisItems.push({ value: '0', suggestion: '' })
+          }
+        }
+
+        // Date range
+        let dateRange = ''
+        const dateEl = allDivs.find(el => el.childElementCount === 0 && getText(el).startsWith('统计周期'))
+        if (dateEl) {
+          dateRange = getText(dateEl).replace('统计周期 ', '')
+        }
+
+        return { diagnosisItems, dateRange }
+      })
+
+      // Tab 1: 观看数据 (default, already visible)
+      const viewMetrics = await extractVisibleMetrics()
+
+      // Tab 2: 互动数据
+      const interactionTab = this.page.locator('h6:has-text("互动数据")').first()
+      if (await interactionTab.count() > 0) {
+        await interactionTab.click()
+        await this.randomDelay(1, 2)
+      }
+      const interactionMetrics = await extractVisibleMetrics()
+
+      // Tab 3: 涨粉数据
+      const followerTab = this.page.locator('h6:has-text("涨粉数据")').first()
+      if (await followerTab.count() > 0) {
+        await followerTab.click()
+        await this.randomDelay(1, 2)
+      }
+      const followerMetrics = await extractVisibleMetrics()
+
+      // Merge all metrics
+      const metrics = { ...viewMetrics, ...interactionMetrics, ...followerMetrics }
+
+      return {
+        period,
+        dateRange: baseData.dateRange,
+        diagnosis: {
+          views: { value: baseData.diagnosisItems[0]?.value || '0', suggestion: baseData.diagnosisItems[0]?.suggestion || '' },
+          newFollowers: { value: baseData.diagnosisItems[1]?.value || '0', suggestion: baseData.diagnosisItems[1]?.suggestion || '' },
+          profileVisitors: { value: baseData.diagnosisItems[2]?.value || '0', suggestion: baseData.diagnosisItems[2]?.suggestion || '' },
+          publishCount: { value: baseData.diagnosisItems[3]?.value || '0', suggestion: baseData.diagnosisItems[3]?.suggestion || '' },
+          interactions: { value: baseData.diagnosisItems[4]?.value || '0', suggestion: baseData.diagnosisItems[4]?.suggestion || '' }
+        },
+        overview: {
+          impressions: metrics['曝光数'] || { value: '0', change: '-' },
+          views: metrics['观看数'] || { value: '0', change: '-' },
+          coverClickRate: metrics['封面点击率'] || { value: '0', change: '-' },
+          avgViewDuration: metrics['平均观看时长'] || { value: '0', change: '-' },
+          totalViewDuration: metrics['观看总时长'] || { value: '0', change: '-' },
+          videoCompletionRate: metrics['视频完播率'] || { value: '0', change: '-' }
+        },
+        interactions: {
+          likes: metrics['点赞数'] || { value: '0', change: '-' },
+          comments: metrics['评论数'] || { value: '0', change: '-' },
+          collects: metrics['收藏数'] || { value: '0', change: '-' },
+          shares: metrics['分享数'] || { value: '0', change: '-' }
+        },
+        followers: {
+          netGain: metrics['净涨粉'] || { value: '0', change: '-' },
+          newFollows: metrics['新增关注'] || { value: '0', change: '-' },
+          unfollows: metrics['取消关注'] || { value: '0', change: '-' },
+          profileVisitors: metrics['主页访客'] || { value: '0', change: '-' }
+        }
+      } as DashboardOverview
+    } catch (error) {
+      logger.error('Error getting dashboard overview:', error)
+      throw error
+    } finally {
+      await this.cleanup()
+    }
+  }
+
+  async getContentAnalytics(options?: {
+    startDate?: string
+    endDate?: string
+  }): Promise<ContentAnalytics> {
+    logger.info('Getting content analytics')
+    try {
+      await this.initialize()
+      if (!this.page) throw new Error('Page not initialized')
+
+      await this.navigateToCreatorCenter('/statistics/data-analysis')
+      await this.randomDelay(1, 2)
+
+      // Fill date filters if provided
+      if (options?.startDate) {
+        const startInput = this.page.locator('input[placeholder*="开始时间"]').first()
+        if (await startInput.count() > 0) {
+          await startInput.click()
+          await startInput.fill(options.startDate)
+          await this.randomDelay(0.5, 1)
+        }
+      }
+      if (options?.endDate) {
+        const endInput = this.page.locator('input[placeholder*="结束时间"]').first()
+        if (await endInput.count() > 0) {
+          await endInput.click()
+          await endInput.fill(options.endDate)
+          await this.randomDelay(0.5, 1)
+          await this.page.keyboard.press('Enter')
+          await this.randomDelay(1, 2)
+          await this.page.waitForLoadState('networkidle', { timeout: 30000 })
+        }
+      }
+
+      // Extract table data
+      const data = await this.page.evaluate(() => {
+        const getText = (el: Element | null): string => el?.textContent?.trim() || ''
+        const notes: {
+          title: string; publishTime: string; impressions: string; views: string
+          coverClickRate: string; likes: string; comments: string; collects: string
+          newFollowers: string; shares: string; avgViewDuration: string; danmaku: string
+        }[] = []
+
+        const rows = document.querySelectorAll('table tbody tr')
+        for (const row of rows) {
+          const cells = row.querySelectorAll('td')
+          if (cells.length >= 11) {
+            // First cell contains title and publish time
+            const infoCell = cells[0]
+            const titleEl = infoCell.querySelectorAll('div')
+            let title = ''
+            let publishTime = ''
+            for (const div of titleEl) {
+              const text = getText(div)
+              if (text.startsWith('发布于')) {
+                publishTime = text.replace('发布于', '')
+              } else if (text && !text.startsWith('发布于') && div.children.length === 0) {
+                title = text
+              }
+            }
+
+            notes.push({
+              title,
+              publishTime,
+              impressions: getText(cells[1]),
+              views: getText(cells[2]),
+              coverClickRate: getText(cells[3]),
+              likes: getText(cells[4]),
+              comments: getText(cells[5]),
+              collects: getText(cells[6]),
+              newFollowers: getText(cells[7]),
+              shares: getText(cells[8]),
+              avgViewDuration: getText(cells[9]),
+              danmaku: getText(cells[10])
+            })
+          }
+        }
+
+        return { notes, totalCount: notes.length }
+      })
+
+      logger.info(`Extracted ${data.totalCount} notes from content analytics`)
+      return data as ContentAnalytics
+    } catch (error) {
+      logger.error('Error getting content analytics:', error)
+      throw error
+    } finally {
+      await this.cleanup()
+    }
+  }
+
+  async getFansAnalytics(period: string = '7days'): Promise<FansAnalytics> {
+    logger.info(`Getting fans analytics for period: ${period}`)
+    try {
+      await this.initialize()
+      if (!this.page) throw new Error('Page not initialized')
+
+      await this.navigateToCreatorCenter('/statistics/fans-data')
+      await this.randomDelay(1, 2)
+
+      // Switch to 30 days if requested
+      if (period === '30days') {
+        const btn30 = this.page.locator('text=近30天').first()
+        if (await btn30.count() > 0) {
+          await btn30.click()
+          await this.randomDelay(1, 2)
+          await this.page.waitForLoadState('networkidle', { timeout: 30000 })
+        }
+      }
+
+      const data = await this.page.evaluate(() => {
+        const getText = (el: Element | null): string => el?.textContent?.trim() || ''
+
+        // Extract fans overview - find labels and their adjacent values
+        const fansLabels = ['总粉丝数', '新增粉丝数', '流失粉丝数']
+        const fansValues: Record<string, string> = {}
+
+        const allDivs = document.querySelectorAll('div')
+        for (const div of allDivs) {
+          const text = getText(div)
+          if (fansLabels.includes(text) && div.children.length === 0) {
+            const parent = div.parentElement
+            if (parent) {
+              const children = Array.from(parent.children)
+              const valueEl = children.find(c => c !== div && getText(c) !== text)
+              if (valueEl) {
+                fansValues[text] = getText(valueEl)
+              }
+            }
+          }
+        }
+
+        // Check if portrait is available
+        let portrait: string | null = null
+        const portraitSection = document.querySelector('div')
+        const noDataTexts = ['粉丝数过少', '先去涨粉']
+        let hasPortrait = true
+        for (const div of allDivs) {
+          const text = getText(div)
+          if (noDataTexts.some(t => text.includes(t))) {
+            hasPortrait = false
+            portrait = text
+            break
+          }
+        }
+        if (hasPortrait) {
+          portrait = 'available'
+        }
+
+        // Extract active fans
+        const activeFans: string[] = []
+        // Active fans section shows "最近还没有粉丝和你互动" when empty
+        let hasActiveFans = true
+        for (const div of allDivs) {
+          const text = getText(div)
+          if (text.includes('最近还没有粉丝和你互动')) {
+            hasActiveFans = false
+            break
+          }
+        }
+
+        return {
+          overview: {
+            totalFans: fansValues['总粉丝数'] || '0',
+            newFans: fansValues['新增粉丝数'] || '0',
+            lostFans: fansValues['流失粉丝数'] || '0'
+          },
+          portrait: hasPortrait ? portrait : null,
+          activeFans
+        }
+      })
+
+      return {
+        period,
+        ...data
+      } as FansAnalytics
+    } catch (error) {
+      logger.error('Error getting fans analytics:', error)
+      throw error
+    } finally {
+      await this.cleanup()
     }
   }
 

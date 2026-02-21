@@ -142,6 +142,71 @@ server.tool(
   }
 )
 
+// Dashboard tools
+server.tool(
+  'get_dashboard_overview',
+  '获取创作者中心账号数据总览（曝光、观看、互动、涨粉等）',
+  {
+    period: z.enum(['7days', '30days']).optional().describe('统计周期，默认近7日')
+  },
+  async ({ period = '7days' }: { period?: string }) => {
+    logger.info(`Getting dashboard overview for period: ${period}`)
+    try {
+      const tools = new RedNoteTools()
+      const data = await tools.getDashboardOverview(period)
+      return {
+        content: [{ type: 'text', text: JSON.stringify(data, null, 2) }]
+      }
+    } catch (error) {
+      logger.error('Error getting dashboard overview:', error)
+      throw error
+    }
+  }
+)
+
+server.tool(
+  'get_content_analytics',
+  '获取内容分析数据（每篇笔记的曝光、观看、点赞、评论、收藏等详细数据）',
+  {
+    startDate: z.string().optional().describe('开始日期，格式 YYYY-MM-DD'),
+    endDate: z.string().optional().describe('结束日期，格式 YYYY-MM-DD')
+  },
+  async ({ startDate, endDate }: { startDate?: string; endDate?: string }) => {
+    logger.info('Getting content analytics')
+    try {
+      const tools = new RedNoteTools()
+      const data = await tools.getContentAnalytics({ startDate, endDate })
+      return {
+        content: [{ type: 'text', text: JSON.stringify(data, null, 2) }]
+      }
+    } catch (error) {
+      logger.error('Error getting content analytics:', error)
+      throw error
+    }
+  }
+)
+
+server.tool(
+  'get_fans_analytics',
+  '获取粉丝数据（总粉丝数、新增/流失粉丝、粉丝画像、活跃粉丝）',
+  {
+    period: z.enum(['7days', '30days']).optional().describe('统计周期，默认近7天')
+  },
+  async ({ period = '7days' }: { period?: string }) => {
+    logger.info(`Getting fans analytics for period: ${period}`)
+    try {
+      const tools = new RedNoteTools()
+      const data = await tools.getFansAnalytics(period)
+      return {
+        content: [{ type: 'text', text: JSON.stringify(data, null, 2) }]
+      }
+    } catch (error) {
+      logger.error('Error getting fans analytics:', error)
+      throw error
+    }
+  }
+)
+
 // Add login tool
 server.tool('login', '登录小红书账号', {}, async () => {
   logger.info('Starting login process')
