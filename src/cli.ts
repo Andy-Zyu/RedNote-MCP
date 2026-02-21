@@ -111,6 +111,36 @@ server.tool(
   }
 )
 
+server.tool(
+  'publish_note',
+  '发布小红书笔记（图文或纯文字）',
+  {
+    title: z.string().describe('笔记标题'),
+    content: z.string().describe('笔记正文'),
+    images: z.array(z.string()).optional().describe('图片文件路径数组（本地绝对路径）'),
+    tags: z.array(z.string()).optional().describe('标签/话题数组')
+  },
+  async ({ title, content, images, tags }: { title: string; content: string; images?: string[]; tags?: string[] }) => {
+    logger.info(`Publishing note: ${title}`)
+    try {
+      const tools = new RedNoteTools()
+      const result = await tools.publishNote({ title, content, images, tags })
+      logger.info(`Publish result: ${result.message}`)
+      return {
+        content: [
+          {
+            type: 'text',
+            text: result.message
+          }
+        ]
+      }
+    } catch (error) {
+      logger.error('Error publishing note:', error)
+      throw error
+    }
+  }
+)
+
 // Add login tool
 server.tool('login', '登录小红书账号', {}, async () => {
   logger.info('Starting login process')

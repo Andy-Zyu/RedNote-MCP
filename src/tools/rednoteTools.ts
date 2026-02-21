@@ -292,6 +292,133 @@ export class RedNoteTools {
     }
   }
 
+  async publishNote(options: {
+    title: string
+    content: string
+    images?: string[]
+    tags?: string[]
+  }): Promise<{ success: boolean; message: string }> {
+    logger.info(`Publishing note with title: ${options.title}`)
+    try {
+      await this.initialize()
+      if (!this.page) throw new Error('Page not initialized')
+
+      // Navigate to publish page
+      logger.info('Navigating to creator publish page')
+      await this.page.goto('https://creator.xiaohongshu.com/publish/publish', { waitUntil: 'networkidle' })
+      await this.randomDelay(1, 2)
+
+      // Upload images if provided
+      if (options.images && options.images.length > 0) {
+        logger.info(`Uploading ${options.images.length} images`)
+        const fileInput = await this.page.$('input[type="file"]')
+        if (fileInput) {
+          await fileInput.setInputFiles(options.images)
+          logger.info('Images set on file input, waiting for upload')
+          // Wait for uploads to complete
+          await this.randomDelay(2, 4)
+          // Wait for upload progress to finish - look for uploaded image indicators
+          try {
+            await this.page.waitForFunction(
+              (count) => {
+                const uploadedItems = document.querySelectorAll('.publish-uploader .image-item, .upload-item, .coverImg')
+                return uploadedItems.length >= count
+              },
+              options.images.length,
+              { timeout: 60000 }
+            )
+            logger.info('All images uploaded successfully')
+          } catch {
+            logger.warn('Image upload wait timed out, proceeding anyway')
+          }
+          await this.randomDelay(1, 2)
+        } else {
+          logger.warn('File input not found, skipping image upload')
+        }
+      }
+
+      // Fill in title
+      logger.info('Filling in title')
+      const titleInput = await this.page.$('#publisherTitleInput, [placeholder*="标题"], .title-input input, .c-input_inner')
+      if (titleInput) {
+        await titleInput.click()
+        await this.randomDelay(0.3, 0.6)
+        await titleInput.type(options.title, { delay: 50 })
+      } else {
+        logger.warn('Title input not found, trying alternative selectors')
+        await this.page.locator('[class*="title"] input, [class*="title"] textarea').first().type(options.title, { delay: 50 })
+      }
+      await this.randomDelay(0.5, 1)
+
+      // Fill in content
+      logger.info('Filling in content')
+      const contentEditor = await this.page.$('#post-textarea, .ql-editor, [contenteditable="true"], [placeholder*="正文"]')
+      if (contentEditor) {
+        await contentEditor.click()
+        await this.randomDelay(0.3, 0.6)
+        await contentEditor.type(options.content, { delay: 30 })
+      } else {
+        logger.warn('Content editor not found, trying alternative selectors')
+        await this.page.locator('[class*="editor"] [contenteditable], [class*="content"] [contenteditable]').first().type(options.content, { delay: 30 })
+      }
+      await this.randomDelay(0.5, 1)
+
+      // Add tags
+      if (options.tags && options.tags.length > 0) {
+        logger.info(`Adding ${options.tags.length} tags`)
+        for (const tag of options.tags) {
+          // Type # followed by tag name in the content area to trigger tag input
+          const editor = await this.page.$('#post-textarea, .ql-editor, [contenteditable="true"]')
+          if (editor) {
+            await editor.click()
+            await this.randomDelay(0.3, 0.5)
+            await editor.type(` #${tag}`, { delay: 50 })
+            await this.randomDelay(0.5, 1)
+            // Press space to confirm the tag
+            await this.page.keyboard.press('Space')
+            await this.randomDelay(0.3, 0.6)
+          }
+        }
+      }
+      await this.randomDelay(1, 2)
+
+      // Click publish button
+      logger.info('Clicking publish button')
+      const publishButton = await this.page.$('button.publishBtn, button.css-k01wbh, [class*="publish"] button, button:has-text("发布")')
+      if (publishButton) {
+        await publishButton.click()
+      } else {
+        // Fallback: try to find button by text
+        await this.page.locator('button').filter({ hasText: '发布' }).first().click()
+      }
+
+      // Wait for publish confirmation
+      logger.info('Waiting for publish confirmation')
+      try {
+        await this.page.waitForURL('**/publish/success**', { timeout: 30000 })
+        logger.info('Note published successfully')
+        return { success: true, message: '笔记发布成功' }
+      } catch {
+        // Check if there's a success message on the page
+        const successText = await this.page.evaluate(() => {
+          const el = document.querySelector('.success, [class*="success"], .toast')
+          return el?.textContent?.trim() || ''
+        })
+        if (successText) {
+          logger.info(`Publish result: ${successText}`)
+          return { success: true, message: successText }
+        }
+        logger.warn('Could not confirm publish success, but no error detected')
+        return { success: true, message: '笔记已提交发布，请在小红书创作者中心确认状态' }
+      }
+    } catch (error) {
+      logger.error('Error publishing note:', error)
+      throw error
+    } finally {
+      await this.cleanup()
+    }
+  }
+
   /**
    * Wait for a random duration between min and max seconds
    * @param min Minimum seconds to wait
