@@ -1,6 +1,6 @@
 {
-  "name": "rednote-mcp",
-  "version": "0.2.3",
+  "name": "@pigbun-ai/rednote-mcp",
+  "version": "0.3.0",
   "description": "A friendly tool to help you access and interact with Xiaohongshu (RedNote) content through Model Context Protocol.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -50,14 +50,17 @@
   ],
   "author": "Leo",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ifuryst/rednote-mcp.git"
+    "url": "git+https://github.com/PigBun-AI/RedNote-MCP.git"
   },
   "bugs": {
-    "url": "https://github.com/ifuryst/rednote-mcp/issues"
+    "url": "https://github.com/PigBun-AI/RedNote-MCP/issues"
   },
-  "homepage": "https://github.com/ifuryst/rednote-mcp#readme",
+  "homepage": "https://github.com/PigBun-AI/RedNote-MCP#readme",
   "engines": {
     "node": ">=16"
   }

@@ -2,7 +2,7 @@
 
 [![English](https://img.shields.io/badge/English-Click-yellow)](docs/README.en.md)
 [![简体中文](https://img.shields.io/badge/简体中文-点击查看-orange)](README.md)
-[![npm](https://img.shields.io/npm/v/rednote-mcp)](https://www.npmjs.com/package/rednote-mcp)
+[![npm](https://img.shields.io/npm/v/@pigbun-ai/rednote-mcp)](https://www.npmjs.com/package/@pigbun-ai/rednote-mcp)
 
 小红书内容访问的MCP服务
 
@@ -20,7 +20,7 @@ npx playwright install
 
 ```bash
 # 全局安装
-npm install -g rednote-mcp
+npm install -g @pigbun-ai/rednote-mcp
 
 # 初始化登录，会自动记录cookie到 ~/.mcp/rednote/cookies.json
 rednote-mcp init
@@ -30,8 +30,8 @@ rednote-mcp init
 
 ```bash
 # 克隆项目
-git clone https://github.com/ifuryst/rednote-mcp.git
-cd rednote-mcp
+git clone https://github.com/PigBun-AI/RedNote-MCP.git
+cd RedNote-MCP
 
 # 安装依赖
 npm install
@@ -134,16 +134,20 @@ npm run dev -- init
 查看我的粉丝增长情况
 ```
 
-### 4. 在 Cursor 中配置 MCP Server
+### 4. 在 MCP 客户端中配置
 
-在 Cursor 的 settings.json 中添加以下配置：
+以下配置适用于 Cursor、Claude Code、Windsurf 等支持 MCP 的客户端。
+
+#### 方式一：npx（推荐，无需安装）
 
 ```json
 {
   "mcpServers": {
-    "RedNote MCP": {
-      "command": "rednote-mcp",
+    "rednote-mcp": {
+      "command": "npx",
       "args": [
+        "-y",
+        "@pigbun-ai/rednote-mcp",
         "--stdio"
       ]
     }
@@ -151,15 +155,14 @@ npm run dev -- init
 }
 ```
 
-或者使用 npx 方式：
+#### 方式二：全局安装后使用
 
 ```json
 {
   "mcpServers": {
-    "RedNote MCP": {
-      "command": "npx",
+    "rednote-mcp": {
+      "command": "rednote-mcp",
       "args": [
-        "rednote-mcp",
         "--stdio"
       ]
     }
@@ -170,7 +173,7 @@ npm run dev -- init
 配置说明：
 
 - `command`: 可以是全局安装后的 `rednote-mcp` 命令，或使用 `npx` 直接运行
-- `args`: 必须包含 `--stdio` 参数以支持 Cursor 的通信方式
+- `args`: 必须包含 `--stdio` 参数以支持 MCP 客户端的通信方式
 
 ## 开发指南
 
@@ -200,7 +203,7 @@ npm test
 MCP Inspector 是一个用于调试 MCP 服务器的工具，可以帮助开发者检查和验证 MCP 服务器的行为。使用以下命令启动：
 
 ```bash
-npx @modelcontextprotocol/inspector npx rednote-mcp --stdio
+npx @modelcontextprotocol/inspector npx @pigbun-ai/rednote-mcp --stdio
 ```
 
 这个命令会：
