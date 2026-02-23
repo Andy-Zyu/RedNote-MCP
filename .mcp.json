@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "rednote-mcp": {
+      "command": "node",
+      "args": ["/Volumes/SSD-990-PRO-2TB/RedNote-MCP/dist/cli.js", "--stdio"]
+    }
+  }
+}

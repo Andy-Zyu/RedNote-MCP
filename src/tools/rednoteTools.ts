@@ -507,17 +507,21 @@ export class RedNoteTools {
       if (options.tags && options.tags.length > 0) {
         logger.info(`Adding ${options.tags.length} tags`)
         for (const tag of options.tags) {
+          // Dismiss tippy popups before each tag to prevent interception
+          await this.dismissTippyPopups()
           await this.page.keyboard.type(`#${tag}`, { delay: 50 })
           await this.page.keyboard.press('Space')
           await this.randomDelay(0.3, 0.6)
         }
+        // Final cleanup after all tags
+        await this.dismissTippyPopups()
         logger.info(`Added ${options.tags.length} tags`)
       }
       await this.randomDelay(1, 2)
 
-      // Click publish button
+      // Click publish button (with tippy-safe retry)
       logger.info('Clicking publish button')
-      await this.page.locator('button:has-text("发布")').first().click()
+      await this.safeClick(this.page.locator('button:has-text("发布")').first(), '发布按钮')
 
       // Wait for publish success — xiaohongshu redirects to /publish/success?...
       logger.info('Waiting for publish confirmation')
@@ -906,6 +910,56 @@ export class RedNoteTools {
       throw error
     } finally {
       await this.cleanup()
+    }
+  }
+
+  /**
+   * Dismiss all tippy tooltip popups that may intercept click events.
+   * Xiaohongshu's creator platform uses tippy.js for tag/topic suggestions
+   * which can overlay buttons and block Playwright clicks.
+   */
+  private async dismissTippyPopups(): Promise<void> {
+    if (!this.page) return
+    try {
+      const removed = await this.page.evaluate(() => {
+        const tippyElements = document.querySelectorAll('[data-tippy-root]')
+        const count = tippyElements.length
+        tippyElements.forEach(el => el.remove())
+        return count
+      })
+      if (removed > 0) {
+        logger.info(`Dismissed ${removed} tippy popup(s)`)
+      }
+    } catch (error) {
+      logger.debug('Error dismissing tippy popups (non-fatal):', error)
+    }
+  }
+
+  /**
+   * Click an element with tippy-safe retry logic.
+   * 1. Dismiss tippy popups
+   * 2. Try normal click
+   * 3. If intercepted, dismiss again and force click
+   */
+  private async safeClick(locator: ReturnType<Page['locator']>, description: string): Promise<void> {
+    await this.dismissTippyPopups()
+    try {
+      await locator.click({ timeout: 15000 })
+      logger.info(`Clicked ${description} successfully`)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      if (errorMsg.includes('intercepts pointer events') || errorMsg.includes('Timeout')) {
+        logger.warn(`Click on ${description} intercepted, dismissing popups and force-clicking`)
+        await this.dismissTippyPopups()
+        // Also click body to dismiss any remaining overlays
+        await this.page?.evaluate(() => document.body.click())
+        await this.randomDelay(0.3, 0.5)
+        await this.dismissTippyPopups()
+        await locator.click({ force: true, timeout: 15000 })
+        logger.info(`Force-clicked ${description} successfully`)
+      } else {
+        throw error
+      }
     }
   }
 
