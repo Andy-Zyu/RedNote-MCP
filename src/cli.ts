@@ -5,6 +5,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { AuthManager } from './auth/authManager'
 import { RedNoteTools } from './tools/rednoteTools'
+import { BrowserManager } from './browser/browserManager'
 import logger, { LOGS_DIR, packLogs } from './utils/logger'
 import { exec } from 'child_process'
 import { promisify } from 'util'
@@ -233,6 +234,9 @@ server.tool('login', '登录小红书账号', {}, async () => {
 // Start the server
 async function main() {
   logger.info('Starting RedNote MCP Server')
+
+  // Register browser cleanup on process exit
+  BrowserManager.registerProcessCleanup()
 
   // Start stdio logging
   const stopLogging = createStdioLogger(`${LOGS_DIR}/stdio.log`)

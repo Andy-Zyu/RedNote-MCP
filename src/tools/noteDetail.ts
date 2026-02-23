@@ -1,19 +1,8 @@
-import { Note } from './rednoteTools'
+import { Note, NoteDetail } from './types'
 import logger from '../utils/logger'
 import { Page } from 'playwright'
 
-export interface NoteDetail {
-  title: string
-  content: string
-  tags: string[]
-  imgs?: string[]
-  videos?: string[]
-  url: string
-  author: string
-  likes?: number
-  collects?: number
-  comments?: number
-}
+export { NoteDetail } from './types'
 
 export async function GetNoteDetail(page: Page): Promise<NoteDetail> {
   // Wait for content to load

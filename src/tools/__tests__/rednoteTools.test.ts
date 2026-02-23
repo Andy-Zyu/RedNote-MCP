@@ -4,10 +4,6 @@ import { RedNoteTools, Note, Comment } from '../rednoteTools'
 describe('RedNoteTools', () => {
   let redNoteTools = new RedNoteTools()
 
-  afterAll(async () => {
-    await redNoteTools.cleanup()
-  })
-
   test('getNoteContent 应该返回笔记详情', async () => {
     const url = '' // 需要替换为实际笔记URL
 
