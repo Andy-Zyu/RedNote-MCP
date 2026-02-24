@@ -1,91 +1,121 @@
-# RedNote MCP
+# PigBun RedNote MCP
 
-[![English](https://img.shields.io/badge/English-Click-yellow)](docs/README.en.md)
-[![简体中文](https://img.shields.io/badge/简体中文-点击查看-orange)](README.md)
-[![npm](https://img.shields.io/npm/v/@pigbun-ai/rednote-mcp)](https://www.npmjs.com/package/@pigbun-ai/rednote-mcp)
+[![npm](https://img.shields.io/npm/v/@pigbun-ai/pigbun-rednote-mcp)](https://www.npmjs.com/package/@pigbun-ai/pigbun-rednote-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-小红书内容访问的MCP服务
+[English](docs/README.en.md) | 简体中文
 
-https://github.com/user-attachments/assets/06b2c67f-d9ed-4a30-8f1d-9743f3edaa3a
+小红书自动化 MCP 服务 — 搜索、发布、数据分析，一站搞定。
+
+> ⚠️ 本工具仅供学习和测试用途，使用者需自行承担使用风险。
 
 ## 快速开始
 
-开始前确保安装了 [playwright](https://github.com/microsoft/playwright) 环境：
+### 1. 获取 API Key
+
+前往 [pigbunai.com](https://pigbunai.com) 注册账号，在 Dashboard 中创建 API Key。
+
+免费套餐：每天 50 次调用（登录操作不计入额度）。
+
+### 2. 安装 Playwright
 
 ```bash
-npx playwright install
+npx playwright install chromium
 ```
 
-### NPM 全局安装
+### 3. 初始化登录
 
 ```bash
-# 全局安装
-npm install -g @pigbun-ai/rednote-mcp
-
-# 初始化登录，会自动记录cookie到 ~/.mcp/rednote/cookies.json
-rednote-mcp init
+npx @pigbun-ai/pigbun-rednote-mcp init
 ```
 
-### 从源码安装
+会打开浏览器，手动完成小红书登录。Cookie 自动保存到 `~/.mcp/rednote/cookies.json`。
 
-```bash
-# 克隆项目
-git clone https://github.com/PigBun-AI/RedNote-MCP.git
-cd RedNote-MCP
+### 4. 配置 MCP 客户端
 
-# 安装依赖
-npm install
+适用于 Claude Desktop、Cursor、Windsurf、Claude Code 等支持 MCP 的客户端：
 
-# 全局安装（可选，方便命令行调用）
-npm install -g .
-
-# 或者直接运行，如初始化登录
-npm run dev -- init
+```json
+{
+  "mcpServers": {
+    "pigbun-rednote-mcp": {
+      "command": "npx",
+      "args": ["@pigbun-ai/pigbun-rednote-mcp@latest", "--stdio"],
+      "env": {
+        "PIGBUN_API_KEY": "pb_live_your_key_here"
+      }
+    }
+  }
+}
 ```
 
-## 功能特性
+将 `pb_live_your_key_here` 替换为你在 Dashboard 中获取的 API Key。
 
-- 认证管理（支持 Cookie 持久化）
-- 关键词搜索笔记
-- 命令行初始化工具
-- 通过 URL 访问笔记内容
-- 发布图文/纯文字笔记
-- 创作者数据看板（账号概览、内容分析、粉丝数据）
-- [ ] 通过 URL 访问评论内容
+## 功能
 
-## 使用说明
+### 搜索与内容
 
-### 1. 初始化登录
+| 工具 | 说明 |
+|------|------|
+| `search_notes` | 关键词搜索笔记（返回含 xsec_token 的链接） |
+| `get_note_content` | 获取笔记详情（标题、正文、图片、视频等） |
+| `get_note_comments` | 获取笔记评论列表 |
+| `publish_note` | 发布图文笔记（至少一张图片） |
 
-首次使用需要先进行登录初始化：
+### 笔记管理
 
-```bash
-rednote-mcp init
-# 或者直接从源码run
-npm run dev -- init
-# 或者mcp-client里选择login
-```
+| 工具 | 说明 |
+|------|------|
+| `get_my_notes` | 获取自己的笔记列表（创作者中心） |
+| `edit_note` | 编辑已发布笔记的标题、正文、标签 |
+| `delete_note` | 删除已发布的笔记 |
 
-执行此命令后：
+### 评论互动
 
-1. 会自动打开浏览器窗口
-2. 跳转到小红书登录页面
-3. 请手动完成登录操作
-4. 登录成功后会自动保存 Cookie 到 `~/.mcp/rednote/cookies.json` 文件
+| 工具 | 说明 |
+|------|------|
+| `comment_note` | 在笔记下发表一级评论 |
+| `reply_comment` | 回复笔记下的指定评论 |
+| `filter_comments` | 对评论进行情感分类（正面/负面/问题/建议/中性） |
 
-### 2. 发布笔记
+### 社交互动
 
-通过 MCP tool `publish_note` 发布小红书笔记：
+| 工具 | 说明 |
+|------|------|
+| `like_note` | 给笔记点赞 |
+| `collect_note` | 收藏笔记 |
+| `follow_author` | 关注笔记作者 |
+
+### 数据分析
+
+| 工具 | 说明 |
+|------|------|
+| `get_dashboard_overview` | 创作者数据总览（曝光、观看、互动、涨粉） |
+| `get_content_analytics` | 内容分析（每篇笔记的详细数据） |
+| `get_fans_analytics` | 粉丝数据（总量、新增/流失、画像、活跃度） |
+| `discover_trending` | 发现热门话题（多关键词热度对比） |
+| `analyze_best_publish_time` | 分析最佳发布时间 |
+| `generate_content_report` | 生成综合运营报告 |
+
+### 其他
+
+| 工具 | 说明 |
+|------|------|
+| `login` | 浏览器登录小红书，保存 Cookie |
+| `get_notifications` | 获取通知消息（评论、点赞、关注） |
+| `get_share_link` | 获取笔记分享链接 |
+
+## 发布笔记
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `title` | string | ✅ | 笔记标题（最多20字） |
-| `content` | string | ✅ | 笔记正文 |
-| `images` | string[] | ❌ | 图片文件路径数组（本地绝对路径） |
-| `tags` | string[] | ❌ | 标签/话题数组 |
-| `keepAlive` | boolean | ❌ | 发布后保持浏览器打开（连续发布多篇时使用） |
+| `title` | string | ✅ | 标题（最多 20 字） |
+| `content` | string | ✅ | 正文 |
+| `images` | string[] | ✅ | 图片路径数组（本地绝对路径，至少 1 张） |
+| `tags` | string[] | ❌ | 标签数组 |
+| `keepAlive` | boolean | ❌ | 发布后保持浏览器（连续发布时使用） |
 
-示例（在支持 MCP 的客户端中）：
+示例：
 
 ```
 帮我发布一篇小红书笔记：
@@ -95,139 +125,47 @@ npm run dev -- init
 标签：咖啡, 拿铁, 居家咖啡
 ```
 
-> ⚠️ 发布前请确保已通过 `rednote-mcp init` 完成登录。
+## 数据看板
 
-### 3. 数据看板
+### 账号总览 `get_dashboard_overview`
 
-通过 MCP 工具获取创作者中心的数据看板信息，支持三个维度：
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `period` | `"7days"` \| `"30days"` | 统计周期，默认 7 天 |
 
-#### `get_dashboard_overview` — 账号数据总览
+返回：曝光、观看、封面点击率、互动数据、涨粉数据。
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `period` | `"7days"` \| `"30days"` | ❌ | 统计周期，默认近7日 |
+### 内容分析 `get_content_analytics`
 
-返回数据包括：账号诊断（观看数、涨粉数、主页访客数、发布数、互动数）、数据总览（曝光、观看、封面点击率、观看时长等）、互动数据（点赞、评论、收藏、分享）、涨粉数据。
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `startDate` | string | 开始日期 YYYY-MM-DD |
+| `endDate` | string | 结束日期 YYYY-MM-DD |
 
-#### `get_content_analytics` — 内容分析
+返回：每篇笔记的曝光、观看、点赞、评论、收藏、分享等。
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `startDate` | string | ❌ | 开始日期，格式 YYYY-MM-DD |
-| `endDate` | string | ❌ | 结束日期，格式 YYYY-MM-DD |
+### 粉丝分析 `get_fans_analytics`
 
-返回每篇笔记的详细数据：曝光、观看、封面点击率、点赞、评论、收藏、涨粉、分享、人均观看时长等。
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `period` | `"7days"` \| `"30days"` | 统计周期，默认 7 天 |
 
-#### `get_fans_analytics` — 粉丝数据
+返回：总粉丝、新增、流失、粉丝画像、活跃粉丝。
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `period` | `"7days"` \| `"30days"` | ❌ | 统计周期，默认近7天 |
+## 调试
 
-返回数据包括：总粉丝数、新增粉丝、流失粉丝、粉丝画像、活跃粉丝。
-
-示例（在支持 MCP 的客户端中）：
-
-```
-帮我看看最近7天的账号数据概览
-帮我分析一下每篇笔记的数据表现
-查看我的粉丝增长情况
-```
-
-### 4. 在 MCP 客户端中配置
-
-以下配置适用于 Cursor、Claude Code、Windsurf 等支持 MCP 的客户端。
-
-#### 方式一：npx（推荐，无需安装）
-
-```json
-{
-  "mcpServers": {
-    "rednote-mcp": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@pigbun-ai/rednote-mcp",
-        "--stdio"
-      ]
-    }
-  }
-}
-```
-
-#### 方式二：全局安装后使用
-
-```json
-{
-  "mcpServers": {
-    "rednote-mcp": {
-      "command": "rednote-mcp",
-      "args": [
-        "--stdio"
-      ]
-    }
-  }
-}
-```
-
-配置说明：
-
-- `command`: 可以是全局安装后的 `rednote-mcp` 命令，或使用 `npx` 直接运行
-- `args`: 必须包含 `--stdio` 参数以支持 MCP 客户端的通信方式
-
-## 开发指南
-
-### 环境要求
-
-- Node.js >= 16
-- npm >= 7
-
-### 开发流程
+使用 MCP Inspector：
 
 ```bash
-# 安装依赖
-npm install
-
-# 构建项目
-npm run build
-
-# 开发模式运行
-npm run dev
-
-# 运行测试
-npm test
+PIGBUN_API_KEY=pb_live_xxx npx @modelcontextprotocol/inspector npx @pigbun-ai/pigbun-rednote-mcp --stdio
 ```
-
-### 使用 MCP Inspector 进行调试
-
-MCP Inspector 是一个用于调试 MCP 服务器的工具，可以帮助开发者检查和验证 MCP 服务器的行为。使用以下命令启动：
-
-```bash
-npx @modelcontextprotocol/inspector npx @pigbun-ai/rednote-mcp --stdio
-```
-
-这个命令会：
-
-1. 启动 MCP Inspector 工具
-2. 通过 Inspector 运行 rednote-mcp 服务
-3. 提供一个交互式界面来检查请求和响应
-4. 帮助调试和验证 MCP 协议的实现
 
 ## 注意事项
 
-1. 首次使用必须执行 `init` 命令进行登录
-2. Cookie 文件包含敏感信息，避免泄露
-3. 建议定期更新 Cookie，避免失效
-4. 确保已正确安装 Node.js 环境
+- Cookie 文件含敏感信息，请勿泄露
+- 建议定期重新登录刷新 Cookie
+- 所有自动化操作从你本地 IP 发出，不经过中心化代理
 
-## 贡献指南
+## License
 
-1. Fork 本仓库
-2. 创建你的特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交你的改动 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启一个 Pull Request
-
-## 许可证
-
-MIT License - 详见 [LICENSE](LICENSE) 文件 
+MIT — 详见 [LICENSE](LICENSE)

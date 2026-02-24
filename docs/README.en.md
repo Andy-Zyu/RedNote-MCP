@@ -1,178 +1,161 @@
-# RedNote MCP
+# PigBun RedNote MCP
 
-[![English](https://img.shields.io/badge/English-Click-yellow)](README.en.md)
-[![简体中文](https://img.shields.io/badge/简体中文-点击查看-orange)](../README.md)
-[![npm](https://img.shields.io/npm/v/rednote-mcp)](https://www.npmjs.com/package/rednote-mcp)
+[![npm](https://img.shields.io/npm/v/@pigbun-ai/pigbun-rednote-mcp)](https://www.npmjs.com/package/@pigbun-ai/pigbun-rednote-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A friendly tool to help you access and interact with Xiaohongshu (RedNote) content through Model Context Protocol.
+[简体中文](../README.md) | English
 
-https://github.com/user-attachments/assets/06b2c67f-d9ed-4a30-8f1d-9743f3edaa3a
+MCP server for Xiaohongshu (RedNote) automation — search, publish, and analyze, all in one place.
+
+> ⚠️ This tool is for learning and testing purposes only. Users assume all risks associated with its use.
 
 ## Getting Started
 
-Before getting started, make sure the [playwright](https://github.com/microsoft/playwright) is installed:
+### 1. Get an API Key
+
+Sign up at [pigbunai.com](https://pigbunai.com) and create an API Key from your Dashboard.
+
+Free tier: 50 calls/day (login operations are not counted).
+
+### 2. Install Playwright
 
 ```bash
-npx playwright install
+npx playwright install chromium
 ```
 
-### Install via NPM
-
-The easiest way to get started is to install RedNote MCP globally:
+### 3. Initialize Login
 
 ```bash
-# Install the package globally
-npm install -g rednote-mcp
-
-# Set up your account
-rednote-mcp init   # This will save your login info to ~/.mcp/rednote/cookies.json
+npx @pigbun-ai/pigbun-rednote-mcp init
 ```
 
-### Build from Source
+A browser window will open. Complete the Xiaohongshu login manually. Cookies are saved to `~/.mcp/rednote/cookies.json`.
 
-If you prefer to build from source:
+### 4. Configure Your MCP Client
 
-```bash
-# Get the code
-git clone https://github.com/ifuryst/rednote-mcp.git
-cd rednote-mcp
-
-# Set up the project
-npm install
-
-# Optional: Install globally for easier CLI access
-npm install -g .
-
-# Or just run it directly for initial setup
-npm run dev -- init
-```
-
-## What's Included
-
-Here's what you can do with RedNote MCP:
-
-- Log in and stay logged in (with automatic cookie management)
-- Search through notes using keywords
-- Use our handy command-line tools
-- View note content using URLs
-
-Coming soon:
-
-- [ ] Access comment sections using URLs
-
-## How to Use
-
-### First Time Setup
-
-Before you start, you'll need to log in. You have a few options:
-
-```bash
-rednote-mcp init
-# If you installed from source:
-npm run dev -- init
-# Or simply use the login option in mcp-client
-```
-
-Here's what happens:
-
-1. Your browser will open automatically
-2. You'll see the Xiaohongshu login page
-3. Log in like you normally would
-4. Once you're in, we'll save your login info to `~/.mcp/rednote/cookies.json`
-
-### Setting up in Cursor
-
-To use RedNote MCP in Cursor, add this to your settings.json:
+Works with Claude Desktop, Cursor, Windsurf, Claude Code, and any MCP-compatible client:
 
 ```json
 {
   "mcpServers": {
-    "RedNote MCP": {
-      "command": "rednote-mcp",
-      "args": [
-        "--stdio"
-      ]
-    }
-  }
-}
-```
-
-Or if you prefer using npx:
-
-```json
-{
-  "mcpServers": {
-    "RedNote MCP": {
+    "pigbun-rednote-mcp": {
       "command": "npx",
-      "args": [
-        "rednote-mcp",
-        "--stdio"
-      ]
+      "args": ["@pigbun-ai/pigbun-rednote-mcp@latest", "--stdio"],
+      "env": {
+        "PIGBUN_API_KEY": "pb_live_your_key_here"
+      }
     }
   }
 }
 ```
 
-A few things to note:
+Replace `pb_live_your_key_here` with the API Key from your Dashboard.
 
-- You can use either the global command (`rednote-mcp`) or `npx`
-- Make sure to include `--stdio` - it's needed for Cursor communication
+## Tools
 
-## Development
+### Search & Content
 
-### What You'll Need
+| Tool | Description |
+|------|-------------|
+| `search_notes` | Search notes by keyword (returns links with xsec_token) |
+| `get_note_content` | Get note details (title, body, images, videos, etc.) |
+| `get_note_comments` | Get comment list for a note |
+| `publish_note` | Publish image-text note (at least one image required) |
 
-- Node.js version 16 or newer
-- npm version 7 or newer
+### Note Management
 
-### Development Commands
+| Tool | Description |
+|------|-------------|
+| `get_my_notes` | List your own notes (creator center) |
+| `edit_note` | Edit a published note's title, body, or tags |
+| `delete_note` | Delete a published note |
+
+### Comments
+
+| Tool | Description |
+|------|-------------|
+| `comment_note` | Post a top-level comment on a note |
+| `reply_comment` | Reply to a specific comment on a note |
+| `filter_comments` | Classify comments by sentiment (positive/negative/question/suggestion/neutral) |
+
+### Social Engagement
+
+| Tool | Description |
+|------|-------------|
+| `like_note` | Like a note |
+| `collect_note` | Bookmark/save a note |
+| `follow_author` | Follow a note's author |
+
+### Analytics
+
+| Tool | Description |
+|------|-------------|
+| `get_dashboard_overview` | Creator dashboard overview (impressions, views, engagement, follower growth) |
+| `get_content_analytics` | Per-note analytics (impressions, views, likes, comments, saves) |
+| `get_fans_analytics` | Follower analytics (total, new/lost, demographics, active) |
+| `discover_trending` | Discover trending topics (multi-keyword comparison) |
+| `analyze_best_publish_time` | Analyze best publishing times |
+| `generate_content_report` | Generate comprehensive operations report |
+
+### Other
+
+| Tool | Description |
+|------|-------------|
+| `login` | Browser-based Xiaohongshu login, saves cookies |
+| `get_notifications` | Get notifications (comments, likes, follows) |
+| `get_share_link` | Get share link for a note |
+
+## Publishing Notes
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `title` | string | ✅ | Title (max 20 chars) |
+| `content` | string | ✅ | Body text |
+| `images` | string[] | ✅ | Local image file paths (at least 1 required) |
+| `tags` | string[] | ❌ | Hashtags |
+| `keepAlive` | boolean | ❌ | Keep browser open for batch publishing |
+
+## Dashboard Analytics
+
+### Overview `get_dashboard_overview`
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `period` | `"7days"` \| `"30days"` | Time range, default 7 days |
+
+Returns: impressions, views, CTR, engagement, follower growth.
+
+### Content Analytics `get_content_analytics`
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `startDate` | string | Start date YYYY-MM-DD |
+| `endDate` | string | End date YYYY-MM-DD |
+
+Returns: per-note impressions, views, likes, comments, saves, shares.
+
+### Follower Analytics `get_fans_analytics`
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `period` | `"7days"` \| `"30days"` | Time range, default 7 days |
+
+Returns: total followers, new, lost, demographics, active followers.
+
+## Debugging
+
+Use MCP Inspector:
 
 ```bash
-# Get everything installed
-npm install
-
-# Build the project
-npm run build
-
-# Run in development mode
-npm run dev
-
-# Run the test suite
-npm test
+PIGBUN_API_KEY=pb_live_xxx npx @modelcontextprotocol/inspector npx @pigbun-ai/pigbun-rednote-mcp --stdio
 ```
 
-### Debugging with MCP Inspector
+## Notes
 
-Need to debug? MCP Inspector is your friend:
-
-```bash
-npx @modelcontextprotocol/inspector npx rednote-mcp --stdio
-```
-
-This will:
-
-1. Start up the Inspector
-2. Run RedNote MCP through it
-3. Give you a nice interface to watch requests and responses
-4. Help you understand what's happening under the hood
-
-## Important Things to Know
-
-1. Don't forget to run `init` when you first start
-2. Keep your cookie file safe - it has your login info
-3. Your login might expire occasionally - just log in again when it does
-4. Make sure you have Node.js set up properly
-
-## Want to Contribute?
-
-We'd love your help! Here's how:
-
-1. Fork this repo
-2. Create a branch for your feature (`git checkout -b feature/CoolNewThing`)
-3. Make your changes (`git commit -m 'Added this cool new thing'`)
-4. Push it up (`git push origin feature/CoolNewThing`)
-5. Open a Pull Request
+- Cookie files contain sensitive data — keep them safe
+- Re-login periodically to refresh cookies
+- All automation runs from your local IP, never through a centralized proxy
 
 ## License
 
-This project is under the MIT License - check out the [LICENSE](LICENSE) file for the details 
+MIT — see [LICENSE](../LICENSE)
