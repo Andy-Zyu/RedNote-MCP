@@ -40,7 +40,7 @@ const server = new McpServer({
 // Register tools
 server.tool(
   'search_notes',
-  '根据关键词搜索笔记',
+  '根据关键词搜索笔记（返回的链接包含 xsec_token，可直接用于 get_note_content、get_note_comments 等工具）',
   {
     keywords: z.string().describe('搜索关键词'),
     limit: z.number().optional().describe('返回结果数量限制')
@@ -68,7 +68,7 @@ server.tool(
   'get_note_content',
   '获取笔记内容',
   {
-    url: z.string().describe('笔记 URL')
+    url: z.string().describe('笔记 URL（必须使用 search_notes 返回的完整链接，包含 xsec_token 参数，否则会被反爬拦截）')
   },
   async ({ url }: { url: string }) => {
     logger.info(`Getting note content for URL: ${url}`)
@@ -96,7 +96,7 @@ server.tool(
   'get_note_comments',
   '获取笔记评论',
   {
-    url: z.string().describe('笔记 URL')
+    url: z.string().describe('笔记 URL（必须使用 search_notes 返回的完整链接，包含 xsec_token 参数，否则会被反爬拦截）')
   },
   async ({ url }: { url: string }) => {
     logger.info(`Getting comments for URL: ${url}`)
@@ -119,15 +119,15 @@ server.tool(
 
 server.tool(
   'publish_note',
-  '发布小红书笔记（图文或纯文字）',
+  '发布小红书笔记（图文笔记，必须提供至少一张图片）',
   {
     title: z.string().describe('笔记标题（最多20字）'),
     content: z.string().describe('笔记正文'),
-    images: z.array(z.string()).optional().describe('图片文件路径数组（本地绝对路径）'),
+    images: z.array(z.string()).min(1).describe('图片文件路径数组（本地绝对路径，至少1张，小红书要求图文笔记必须有图片）'),
     tags: z.array(z.string()).optional().describe('标签/话题数组'),
     keepAlive: z.boolean().optional().describe('发布后是否保持浏览器打开（用于连续发布多篇笔记）')
   },
-  async ({ title, content, images, tags, keepAlive }: { title: string; content: string; images?: string[]; tags?: string[]; keepAlive?: boolean }) => {
+  async ({ title, content, images, tags, keepAlive }: { title: string; content: string; images: string[]; tags?: string[]; keepAlive?: boolean }) => {
     logger.info(`Publishing note: ${title}`)
     try {
       const tools = new RedNoteTools()
