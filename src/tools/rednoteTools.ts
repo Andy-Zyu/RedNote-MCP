@@ -1,6 +1,7 @@
 import { Page } from 'playwright'
 import logger from '../utils/logger'
 import { BrowserManager, PageLease } from '../browser/browserManager'
+import { BaseTools } from './baseTools'
 import { SearchInterceptor } from '../interceptors/searchInterceptor'
 import { NoteDetailInterceptor } from '../interceptors/noteDetailInterceptor'
 import { NoteCommentsInterceptor } from '../interceptors/noteCommentsInterceptor'
@@ -33,32 +34,10 @@ export {
   FansAnalytics,
 } from './types'
 
-export class RedNoteTools {
-  private lease: PageLease | null = null
-  private page: Page | null = null
-
+export class RedNoteTools extends BaseTools {
   constructor() {
+    super()
     logger.info('Initializing RedNoteTools')
-  }
-
-  extractRedBookUrl(shareText: string): string {
-    // 匹配 http://xhslink.com/ 开头的链接
-    const xhslinkRegex = /(https?:\/\/xhslink\.com\/[a-zA-Z0-9\/]+)/i
-    const xhslinkMatch = shareText.match(xhslinkRegex)
-
-    if (xhslinkMatch && xhslinkMatch[1]) {
-      return xhslinkMatch[1]
-    }
-
-    // 匹配 https://www.xiaohongshu.com/ 开头的链接
-    const xiaohongshuRegex = /(https?:\/\/(?:www\.)?xiaohongshu\.com\/[^，\s]+)/i
-    const xiaohongshuMatch = shareText.match(xiaohongshuRegex)
-
-    if (xiaohongshuMatch && xiaohongshuMatch[1]) {
-      return xiaohongshuMatch[1]
-    }
-
-    return shareText
   }
 
   async searchNotes(keywords: string, limit: number = 10): Promise<Note[]> {
@@ -189,7 +168,6 @@ export class RedNoteTools {
       const fileInput = this.page.locator('input[type="file"]').first()
       await fileInput.setInputFiles(options.images)
       logger.info('Images set on file input, waiting for upload')
-      // Wait for the title input to appear (indicates upload completed and form is ready)
       await this.page.waitForSelector('input[placeholder*="标题"], input[placeholder*="赞"]', { timeout: 60000 })
       await this.randomDelay(1, 2)
 
@@ -211,7 +189,6 @@ export class RedNoteTools {
         await this.randomDelay(0.3, 0.6)
         await this.page.keyboard.type(options.content, { delay: 30 })
       } else {
-        // Fallback: use any contenteditable element
         const allEditable = this.page.locator('[contenteditable="true"]')
         const count = await allEditable.count()
         if (count >= 1) {
@@ -229,13 +206,11 @@ export class RedNoteTools {
       if (options.tags && options.tags.length > 0) {
         logger.info(`Adding ${options.tags.length} tags`)
         for (const tag of options.tags) {
-          // Dismiss tippy popups before each tag to prevent interception
           await this.dismissTippyPopups()
           await this.page.keyboard.type(`#${tag}`, { delay: 50 })
           await this.page.keyboard.press('Space')
           await this.randomDelay(0.3, 0.6)
         }
-        // Final cleanup after all tags
         await this.dismissTippyPopups()
         logger.info(`Added ${options.tags.length} tags`)
       }
@@ -245,7 +220,7 @@ export class RedNoteTools {
       logger.info('Clicking publish button')
       await this.safeClick(this.page.locator('button:has-text("发布")').first(), '发布按钮')
 
-      // Wait for publish success — xiaohongshu redirects to /publish/success?...
+      // Wait for publish success
       logger.info('Waiting for publish confirmation')
       const maxPublishWaitMs = 30000
       const publishStart = Date.now()
@@ -258,7 +233,6 @@ export class RedNoteTools {
         await this.randomDelay(0.5, 1)
       }
 
-      // If we didn't redirect, check page state
       logger.warn('Did not detect /publish/success redirect within timeout')
       return {
         success: true,
@@ -269,7 +243,6 @@ export class RedNoteTools {
       throw error
     } finally {
       if (!options.keepAlive) {
-        // Close the creator tab if it's a different page from the lease
         if (this.page && this.page !== lease.page && !this.page.isClosed()) {
           await this.page.close()
         }
@@ -278,56 +251,6 @@ export class RedNoteTools {
         await lease.release()
       }
     }
-  }
-
-  /**
-   * Navigate to a creator center page via SSO.
-   * Creator subdomain requires SSO — we must first visit the main site,
-   * click the publish link (which triggers SSO in a new tab), then navigate
-   * to the target URL within that authenticated tab.
-   */
-  private async navigateToCreator(lease: PageLease, targetUrl: string): Promise<Page> {
-    const page = lease.page
-
-    // Step 1: Visit main site to activate cookies and find the publish link
-    await page.goto('https://www.xiaohongshu.com', {
-      waitUntil: 'domcontentloaded',
-      timeout: 30000
-    })
-    logger.info('Main site loaded for SSO trigger')
-
-    // Step 2: Click the publish link to trigger SSO → opens new tab
-    const publishLink = page.locator('a[href*="creator.xiaohongshu.com/publish"]')
-    if (await publishLink.count() === 0) {
-      throw new Error('未找到发布链接，可能未登录，请先运行 login 工具登录')
-    }
-
-    const [creatorPage] = await Promise.all([
-      page.context().waitForEvent('page', { timeout: 60000 }),
-      publishLink.first().click()
-    ])
-    await creatorPage.waitForLoadState('domcontentloaded', { timeout: 60000 })
-    logger.info(`SSO complete, creator tab on: ${creatorPage.url()}`)
-
-    // Check if SSO failed
-    const creatorUrl = creatorPage.url()
-    if (creatorUrl.includes('login') || creatorUrl.includes('cas')) {
-      await creatorPage.close()
-      throw new Error('未登录或 Cookie 已失效，请先运行 login 工具登录')
-    }
-
-    // Step 3: Navigate to the target page within the authenticated creator tab
-    if (!creatorUrl.includes(new URL(targetUrl).pathname)) {
-      await creatorPage.goto(targetUrl, {
-        waitUntil: 'domcontentloaded',
-        timeout: 30000
-      })
-      logger.info(`Navigated to target: ${creatorPage.url()}`)
-    }
-
-    // Wait for content to render
-    await new Promise(r => setTimeout(r, 2000))
-    return creatorPage
   }
 
   async getDashboardOverview(period: string = '7days'): Promise<DashboardOverview> {
@@ -340,7 +263,6 @@ export class RedNoteTools {
       activePage = await this.navigateToCreator(lease, targetUrl)
 
       const interceptor = new DashboardInterceptor(activePage, period)
-      // Page already loaded — if API wasn't intercepted during goto, use DOM fallback
       const result = await interceptor.fallbackDom()
       logger.info('Dashboard overview returned via dom')
       return result
@@ -404,66 +326,5 @@ export class RedNoteTools {
       }
       await lease.release()
     }
-  }
-
-  /**
-   * Dismiss all tippy tooltip popups that may intercept click events.
-   * Xiaohongshu's creator platform uses tippy.js for tag/topic suggestions
-   * which can overlay buttons and block Playwright clicks.
-   */
-  private async dismissTippyPopups(): Promise<void> {
-    if (!this.page) return
-    try {
-      const removed = await this.page.evaluate(() => {
-        const tippyElements = document.querySelectorAll('[data-tippy-root]')
-        const count = tippyElements.length
-        tippyElements.forEach(el => el.remove())
-        return count
-      })
-      if (removed > 0) {
-        logger.info(`Dismissed ${removed} tippy popup(s)`)
-      }
-    } catch (error) {
-      logger.debug('Error dismissing tippy popups (non-fatal):', error)
-    }
-  }
-
-  /**
-   * Click an element with tippy-safe retry logic.
-   * 1. Dismiss tippy popups
-   * 2. Try normal click
-   * 3. If intercepted, dismiss again and force click
-   */
-  private async safeClick(locator: ReturnType<Page['locator']>, description: string): Promise<void> {
-    await this.dismissTippyPopups()
-    try {
-      await locator.click({ timeout: 15000 })
-      logger.info(`Clicked ${description} successfully`)
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      if (errorMsg.includes('intercepts pointer events') || errorMsg.includes('Timeout')) {
-        logger.warn(`Click on ${description} intercepted, dismissing popups and force-clicking`)
-        await this.dismissTippyPopups()
-        // Also click body to dismiss any remaining overlays
-        await this.page?.evaluate(() => document.body.click())
-        await this.randomDelay(0.3, 0.5)
-        await this.dismissTippyPopups()
-        await locator.click({ force: true, timeout: 15000 })
-        logger.info(`Force-clicked ${description} successfully`)
-      } else {
-        throw error
-      }
-    }
-  }
-
-  /**
-   * Wait for a random duration between min and max seconds
-   * @param min Minimum seconds to wait
-   * @param max Maximum seconds to wait
-   */
-  private async randomDelay(min: number, max: number): Promise<void> {
-    const delay = Math.random() * (max - min) + min
-    logger.debug(`Adding random delay of ${delay.toFixed(2)} seconds`)
-    await new Promise((resolve) => setTimeout(resolve, delay * 1000))
   }
 }

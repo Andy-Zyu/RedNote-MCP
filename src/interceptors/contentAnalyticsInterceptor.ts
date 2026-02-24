@@ -33,44 +33,39 @@ export class ContentAnalyticsInterceptor extends BaseInterceptor<ContentAnalytic
     // Wait for table to render
     await this.page.waitForSelector('table tbody tr', { timeout: 30000 })
 
-    const data = await this.page.evaluate(() => {
-      const getText = (el: Element | null): string => el?.textContent?.trim() || ''
-      const notes: {
-        title: string; publishTime: string; impressions: string; views: string
-        coverClickRate: string; likes: string; comments: string; collects: string
-        newFollowers: string; shares: string; avgViewDuration: string; danmaku: string
-      }[] = []
-
-      const rows = document.querySelectorAll('table tbody tr')
-      for (const row of rows) {
-        const cells = row.querySelectorAll('td')
-        if (cells.length >= 11) {
-          const infoCell = cells[0]
-          const titleEl = infoCell.querySelectorAll('div')
-          let title = ''
-          let publishTime = ''
-          for (const div of titleEl) {
-            const text = getText(div)
-            if (text.startsWith('发布于')) {
-              publishTime = text.replace('发布于', '')
-            } else if (text && !text.startsWith('发布于') && div.children.length === 0) {
-              title = text
+    const data = await this.page.evaluate(`
+      (() => {
+        const notes = [];
+        const rows = document.querySelectorAll('table tbody tr');
+        for (const row of rows) {
+          const cells = row.querySelectorAll('td');
+          if (cells.length >= 11) {
+            const infoCell = cells[0];
+            const titleEl = infoCell.querySelectorAll('div');
+            let title = '';
+            let publishTime = '';
+            for (const div of titleEl) {
+              const text = (div.textContent || '').trim();
+              if (text.startsWith('发布于')) {
+                publishTime = text.replace('发布于', '');
+              } else if (text && !text.startsWith('发布于') && div.children.length === 0) {
+                title = text;
+              }
             }
+            const gt = (el) => (el ? (el.textContent || '').trim() : '');
+            notes.push({
+              title, publishTime,
+              impressions: gt(cells[1]), views: gt(cells[2]),
+              coverClickRate: gt(cells[3]), likes: gt(cells[4]),
+              comments: gt(cells[5]), collects: gt(cells[6]),
+              newFollowers: gt(cells[7]), shares: gt(cells[8]),
+              avgViewDuration: gt(cells[9]), danmaku: gt(cells[10]),
+            });
           }
-
-          notes.push({
-            title, publishTime,
-            impressions: getText(cells[1]), views: getText(cells[2]),
-            coverClickRate: getText(cells[3]), likes: getText(cells[4]),
-            comments: getText(cells[5]), collects: getText(cells[6]),
-            newFollowers: getText(cells[7]), shares: getText(cells[8]),
-            avgViewDuration: getText(cells[9]), danmaku: getText(cells[10]),
-          })
         }
-      }
-
-      return { notes, totalCount: notes.length }
-    })
+        return { notes, totalCount: notes.length };
+      })()
+    `) as ContentAnalytics
 
     logger.info(`DOM fallback extracted ${data.totalCount} notes from content analytics`)
     return data as ContentAnalytics

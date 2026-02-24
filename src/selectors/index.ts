@@ -89,4 +89,64 @@ export const SELECTORS = {
     noDataTexts: ['粉丝数过少', '先去涨粉'],
     noActiveFansText: '最近还没有粉丝和你互动',
   },
+
+  noteManage: {
+    /** Note card on /new/note-manager. Each card carries noteId in data-impression. */
+    noteCard: 'div.note[data-impression]',
+    noteTitle: '.info .raw .title',
+    editButton: 'span.control.data-edit',
+    deleteButton: 'span.control.data-del',
+    /** Delete confirmation dialog */
+    deleteDialog: 'div.modal-beer-box',
+    deleteConfirmButton: 'button.confirm-btn',
+    /** Edit page (publish/update) elements — reuses publish selectors */
+    titleInput: 'input[placeholder*="标题"], input[placeholder*="赞"]',
+    contentEditor: '.tiptap.ProseMirror',
+    publishButton: 'button:has-text("发布")',
+  },
+
+  notification: {
+    page: '.notification-page',
+    tabList: '.reds-tabs-list',
+    tabItem: '.reds-tab-item.tab-item',
+    activeTab: '.reds-tab-item.active',
+    contentContainer: '.tabs-content-container',
+    itemContainer: '.tabs-content-container > div.container',
+    endContainer: '.end-container',
+    userInfo: '.user-info',
+    userName: '.user-info a',
+    userTag: '.user-info .user-tag',
+    interactionHint: '.interaction-hint',
+    interactionAction: '.interaction-hint > span:first-child',
+    interactionTime: '.interaction-hint .interaction-time',
+    interactionContent: '.interaction-content',
+    quoteInfo: '.quote-info',
+    extraImage: '.extra .extra-image',
+    loadMore: 'text=查看更多历史消息',
+  },
+
+  engagement: {
+    /** The engage bar at the bottom of note detail (like/collect/comment/share) */
+    engageBar: '.interact-container .buttons.engage-bar-style',
+    likeWrapper: '.interact-container .like-wrapper',
+    likeActiveClass: 'like-active',
+    collectWrapper: '.interact-container .collect-wrapper',
+    collectActiveClass: 'collect-active',
+    likeCount: '.interact-container .like-wrapper .count',
+    collectCount: '.interact-container .collect-wrapper .count',
+    /** Follow button in the author section of note detail */
+    followBtnContainer: '.note-detail-follow-btn',
+    followButton: '.note-detail-follow-btn button.follow-button',
+    followButtonText: '.note-detail-follow-btn button.follow-button .reds-button-new-text',
+  },
+
+  replyComment: {
+    commentItem: '.comment-item',
+    commentAuthor: '.author a.name',
+    commentText: '.content .note-text',
+    replyButton: '.reply.icon-container',
+    replyInput: '#content-textarea',
+    submitReply: 'button.btn.submit',
+    commentScroller: '.note-scroller',
+  },
 } as const

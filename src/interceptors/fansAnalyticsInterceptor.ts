@@ -44,53 +44,48 @@ export class FansAnalyticsInterceptor extends BaseInterceptor<FansAnalytics> {
       }
     }
 
-    const data = await this.page.evaluate(() => {
-      const getText = (el: Element | null): string => el?.textContent?.trim() || ''
-      const fansLabels = ['总粉丝数', '新增粉丝数', '流失粉丝数']
-      const fansValues: Record<string, string> = {}
-
-      const allDivs = document.querySelectorAll('div')
-      for (const div of allDivs) {
-        const text = getText(div)
-        if (fansLabels.includes(text) && div.children.length === 0) {
-          const parent = div.parentElement
-          if (parent) {
-            const children = Array.from(parent.children)
-            const valueEl = children.find(c => c !== div && getText(c) !== text)
-            if (valueEl) fansValues[text] = getText(valueEl)
+    const data = await this.page.evaluate(`
+      (() => {
+        var gt = (el) => el ? (el.textContent || '').trim() : '';
+        var fansLabels = ['总粉丝数', '新增粉丝数', '流失粉丝数'];
+        var fansValues = {};
+        var allDivs = document.querySelectorAll('div');
+        for (var div of allDivs) {
+          var text = gt(div);
+          if (fansLabels.indexOf(text) >= 0 && div.children.length === 0) {
+            var parent = div.parentElement;
+            if (parent) {
+              var children = Array.from(parent.children);
+              var valueEl = children.find(function(c) { return c !== div && gt(c) !== text; });
+              if (valueEl) fansValues[text] = gt(valueEl);
+            }
           }
         }
-      }
-
-      let portrait: string | null = null
-      const noDataTexts = ['粉丝数过少', '先去涨粉']
-      let hasPortrait = true
-      for (const div of allDivs) {
-        const text = getText(div)
-        if (noDataTexts.some(t => text.includes(t))) {
-          hasPortrait = false
-          portrait = text
-          break
+        var portrait = null;
+        var noDataTexts = ['粉丝数过少', '先去涨粉'];
+        var hasPortrait = true;
+        for (var div of allDivs) {
+          var text = gt(div);
+          if (noDataTexts.some(function(t) { return text.indexOf(t) >= 0; })) {
+            hasPortrait = false;
+            portrait = text;
+            break;
+          }
         }
-      }
-      if (hasPortrait) portrait = 'available'
+        if (hasPortrait) portrait = 'available';
+        var activeFans = [];
+        return {
+          overview: {
+            totalFans: fansValues['总粉丝数'] || '0',
+            newFans: fansValues['新增粉丝数'] || '0',
+            lostFans: fansValues['流失粉丝数'] || '0',
+          },
+          portrait: hasPortrait ? portrait : null,
+          activeFans: activeFans,
+        };
+      })()
+    `) as { overview: { totalFans: string; newFans: string; lostFans: string }; portrait: string | null; activeFans: string[] }
 
-      const activeFans: string[] = []
-      for (const div of allDivs) {
-        if (getText(div).includes('最近还没有粉丝和你互动')) break
-      }
-
-      return {
-        overview: {
-          totalFans: fansValues['总粉丝数'] || '0',
-          newFans: fansValues['新增粉丝数'] || '0',
-          lostFans: fansValues['流失粉丝数'] || '0',
-        },
-        portrait: hasPortrait ? portrait : null,
-        activeFans,
-      }
-    })
-
-    return { period: this.period, ...data } as FansAnalytics
+    return { period: this.period, ...data }
   }
 }

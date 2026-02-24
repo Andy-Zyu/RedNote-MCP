@@ -74,55 +74,56 @@ export class DashboardInterceptor extends BaseInterceptor<DashboardOverview> {
     }
 
     const extractVisibleMetrics = async (): Promise<Record<string, { value: string; change: string }>> => {
-      return await this.page.evaluate(() => {
-        const getText = (el: Element | null): string => el?.textContent?.trim() || ''
-        const allDivs = Array.from(document.querySelectorAll('div'))
-        const metrics: Record<string, { value: string; change: string }> = {}
-        const knownLabels = [
-          '曝光数', '观看数', '封面点击率', '平均观看时长', '观看总时长', '视频完播率',
-          '点赞数', '评论数', '收藏数', '分享数',
-          '净涨粉', '新增关注', '取消关注', '主页访客'
-        ]
-        for (const label of knownLabels) {
-          const labelEl = allDivs.find(el => el.childElementCount === 0 && getText(el) === label)
-          if (labelEl && labelEl.parentElement) {
-            const children = Array.from(labelEl.parentElement.children)
-            const idx = children.indexOf(labelEl)
-            metrics[label] = {
-              value: children[idx + 1] ? getText(children[idx + 1]) : '0',
-              change: children[idx + 2] ? getText(children[idx + 2]) : '-'
+      return await this.page.evaluate(`
+        (() => {
+          var gt = (el) => el ? (el.textContent || '').trim() : '';
+          var allDivs = Array.from(document.querySelectorAll('div'));
+          var metrics = {};
+          var knownLabels = [
+            '曝光数', '观看数', '封面点击率', '平均观看时长', '观看总时长', '视频完播率',
+            '点赞数', '评论数', '收藏数', '分享数',
+            '净涨粉', '新增关注', '取消关注', '主页访客'
+          ];
+          for (var label of knownLabels) {
+            var labelEl = allDivs.find(function(el) { return el.childElementCount === 0 && gt(el) === label; });
+            if (labelEl && labelEl.parentElement) {
+              var children = Array.from(labelEl.parentElement.children);
+              var idx = children.indexOf(labelEl);
+              metrics[label] = {
+                value: children[idx + 1] ? gt(children[idx + 1]) : '0',
+                change: children[idx + 2] ? gt(children[idx + 2]) : '-'
+              };
             }
           }
-        }
-        return metrics
-      })
+          return metrics;
+        })()
+      `)
     }
 
-    const baseData = await this.page.evaluate(() => {
-      const getText = (el: Element | null): string => el?.textContent?.trim() || ''
-      const allDivs = Array.from(document.querySelectorAll('div'))
-
-      const diagnosisItems: { value: string; suggestion: string }[] = []
-      const diagLabels = ['观看数：', '涨粉数：', '主页访客数：', '发布数：', '互动数：']
-      for (const label of diagLabels) {
-        const labelEl = allDivs.find(el => el.childElementCount === 0 && getText(el) === label)
-        if (labelEl && labelEl.parentElement) {
-          const siblings = Array.from(labelEl.parentElement.children)
-          const suggestionEl = siblings.find(s => s !== labelEl)
-          const suggestion = suggestionEl ? getText(suggestionEl) : ''
-          const match = suggestion.match(/为\s*(\d+)/)
-          diagnosisItems.push({ value: match ? match[1] : '0', suggestion })
-        } else {
-          diagnosisItems.push({ value: '0', suggestion: '' })
+    const baseData = await this.page.evaluate(`
+      (() => {
+        var gt = (el) => el ? (el.textContent || '').trim() : '';
+        var allDivs = Array.from(document.querySelectorAll('div'));
+        var diagnosisItems = [];
+        var diagLabels = ['观看数：', '涨粉数：', '主页访客数：', '发布数：', '互动数：'];
+        for (var label of diagLabels) {
+          var labelEl = allDivs.find(function(el) { return el.childElementCount === 0 && gt(el) === label; });
+          if (labelEl && labelEl.parentElement) {
+            var siblings = Array.from(labelEl.parentElement.children);
+            var suggestionEl = siblings.find(function(s) { return s !== labelEl; });
+            var suggestion = suggestionEl ? gt(suggestionEl) : '';
+            var match = suggestion.match(/为\\s*(\\d+)/);
+            diagnosisItems.push({ value: match ? match[1] : '0', suggestion: suggestion });
+          } else {
+            diagnosisItems.push({ value: '0', suggestion: '' });
+          }
         }
-      }
-
-      let dateRange = ''
-      const dateEl = allDivs.find(el => el.childElementCount === 0 && getText(el).startsWith('统计周期'))
-      if (dateEl) dateRange = getText(dateEl).replace('统计周期 ', '')
-
-      return { diagnosisItems, dateRange }
-    })
+        var dateRange = '';
+        var dateEl = allDivs.find(function(el) { return el.childElementCount === 0 && gt(el).startsWith('统计周期'); });
+        if (dateEl) dateRange = gt(dateEl).replace('统计周期 ', '');
+        return { diagnosisItems: diagnosisItems, dateRange: dateRange };
+      })()
+    `) as { diagnosisItems: { value: string; suggestion: string }[]; dateRange: string }
 
     const viewMetrics = await extractVisibleMetrics()
 
