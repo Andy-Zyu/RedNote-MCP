@@ -1,6 +1,6 @@
 {
-  "name": "@pigbun-ai/rednote-mcp",
-  "version": "0.3.1",
+  "name": "@pigbun-ai/pigbun-rednote-mcp",
+  "version": "0.5.0",
   "description": "A friendly tool to help you access and interact with Xiaohongshu (RedNote) content through Model Context Protocol.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

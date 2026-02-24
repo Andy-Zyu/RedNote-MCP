@@ -11,6 +11,7 @@ import { AnalyticsTools } from './tools/analyticsTools'
 import { EngagementTools } from './tools/engagementTools'
 import { NotificationTools } from './tools/notificationTools'
 import { BrowserManager } from './browser/browserManager'
+import { getGuard } from './guard/apiKeyGuard'
 import logger, { LOGS_DIR, packLogs } from './utils/logger'
 import { exec } from 'child_process'
 import { promisify } from 'util'
@@ -20,8 +21,12 @@ const execAsync = promisify(exec)
 
 const name = 'rednote'
 const description =
-  'A friendly tool to help you access and interact with Xiaohongshu (RedNote) content through Model Context Protocol.'
-const version = '0.2.3'
+  'A friendly tool to help you access and interact with Xiaohongshu (RedNote) content through Model Context Protocol.\n\n' +
+  'DISCLAIMER: This tool is provided for learning and testing purposes only. ' +
+  'Users assume all risks associated with its use. ' +
+  'The authors are not responsible for any consequences arising from the use of this tool.\n\n' +
+  'Requires a PigBun AI API Key. Get yours at https://pigbunai.com'
+const version = '0.5.0'
 
 // Create server instance
 const server = new McpServer({
@@ -46,6 +51,7 @@ server.tool(
     limit: z.number().optional().describe('返回结果数量限制')
   },
   async ({ keywords, limit = 10 }: { keywords: string; limit?: number }) => {
+    await getGuard().verify('search_notes')
     logger.info(`Searching notes with keywords: ${keywords}, limit: ${limit}`)
     try {
       const tools = new RedNoteTools()
@@ -71,6 +77,7 @@ server.tool(
     url: z.string().describe('笔记 URL（必须使用 search_notes 返回的完整链接，包含 xsec_token 参数，否则会被反爬拦截）')
   },
   async ({ url }: { url: string }) => {
+    await getGuard().verify('get_note_content')
     logger.info(`Getting note content for URL: ${url}`)
     try {
       const tools = new RedNoteTools()
@@ -99,6 +106,7 @@ server.tool(
     url: z.string().describe('笔记 URL（必须使用 search_notes 返回的完整链接，包含 xsec_token 参数，否则会被反爬拦截）')
   },
   async ({ url }: { url: string }) => {
+    await getGuard().verify('get_note_comments')
     logger.info(`Getting comments for URL: ${url}`)
     try {
       const tools = new RedNoteTools()
@@ -128,6 +136,7 @@ server.tool(
     keepAlive: z.boolean().optional().describe('发布后是否保持浏览器打开（用于连续发布多篇笔记）')
   },
   async ({ title, content, images, tags, keepAlive }: { title: string; content: string; images: string[]; tags?: string[]; keepAlive?: boolean }) => {
+    await getGuard().verify('publish_note')
     logger.info(`Publishing note: ${title}`)
     try {
       const tools = new RedNoteTools()
@@ -156,6 +165,7 @@ server.tool(
     period: z.enum(['7days', '30days']).optional().describe('统计周期，默认近7日')
   },
   async ({ period = '7days' }: { period?: string }) => {
+    await getGuard().verify('get_dashboard_overview')
     logger.info(`Getting dashboard overview for period: ${period}`)
     try {
       const tools = new RedNoteTools()
@@ -178,6 +188,7 @@ server.tool(
     endDate: z.string().optional().describe('结束日期，格式 YYYY-MM-DD')
   },
   async ({ startDate, endDate }: { startDate?: string; endDate?: string }) => {
+    await getGuard().verify('get_content_analytics')
     logger.info('Getting content analytics')
     try {
       const tools = new RedNoteTools()
@@ -199,6 +210,7 @@ server.tool(
     period: z.enum(['7days', '30days']).optional().describe('统计周期，默认近7天')
   },
   async ({ period = '7days' }: { period?: string }) => {
+    await getGuard().verify('get_fans_analytics')
     logger.info(`Getting fans analytics for period: ${period}`)
     try {
       const tools = new RedNoteTools()
@@ -215,6 +227,7 @@ server.tool(
 
 // Add login tool
 server.tool('login', '登录小红书账号', {}, async () => {
+  await getGuard().verify('login')
   logger.info('Starting login process')
   const authManager = new AuthManager()
   try {
@@ -243,6 +256,7 @@ server.tool(
   '获取自己的笔记列表（创作者中心）',
   {},
   async () => {
+    await getGuard().verify('get_my_notes')
     logger.info('Getting my notes')
     try {
       const tools = new NoteManageTools()
@@ -267,6 +281,7 @@ server.tool(
     tags: z.array(z.string()).optional().describe('新标签数组'),
   },
   async ({ noteId, title, content, tags }: { noteId: string; title?: string; content?: string; tags?: string[] }) => {
+    await getGuard().verify('edit_note')
     logger.info(`Editing note: ${noteId}`)
     try {
       const tools = new NoteManageTools()
@@ -288,6 +303,7 @@ server.tool(
     noteId: z.string().describe('笔记 ID 或标题关键词'),
   },
   async ({ noteId }: { noteId: string }) => {
+    await getGuard().verify('delete_note')
     logger.info(`Deleting note: ${noteId}`)
     try {
       const tools = new NoteManageTools()
@@ -312,6 +328,7 @@ server.tool(
     content: z.string().describe('评论内容'),
   },
   async ({ noteUrl, content }: { noteUrl: string; content: string }) => {
+    await getGuard().verify('comment_note')
     logger.info(`Commenting on note: ${noteUrl}`)
     try {
       const tools = new CommentTools()
@@ -336,6 +353,7 @@ server.tool(
     replyText: z.string().describe('回复内容'),
   },
   async ({ noteUrl, commentAuthor, commentContent, replyText }: { noteUrl: string; commentAuthor: string; commentContent: string; replyText: string }) => {
+    await getGuard().verify('reply_comment')
     logger.info(`Replying to comment by ${commentAuthor}`)
     try {
       const tools = new CommentTools()
@@ -357,6 +375,7 @@ server.tool(
     noteUrl: z.string().describe('笔记 URL'),
   },
   async ({ noteUrl }: { noteUrl: string }) => {
+    await getGuard().verify('filter_comments')
     logger.info(`Filtering comments for: ${noteUrl}`)
     try {
       const tools = new CommentTools()
@@ -380,6 +399,7 @@ server.tool(
     noteUrl: z.string().describe('笔记 URL'),
   },
   async ({ noteUrl }: { noteUrl: string }) => {
+    await getGuard().verify('like_note')
     logger.info(`Liking note: ${noteUrl}`)
     try {
       const tools = new EngagementTools()
@@ -401,6 +421,7 @@ server.tool(
     noteUrl: z.string().describe('笔记 URL'),
   },
   async ({ noteUrl }: { noteUrl: string }) => {
+    await getGuard().verify('collect_note')
     logger.info(`Collecting note: ${noteUrl}`)
     try {
       const tools = new EngagementTools()
@@ -422,6 +443,7 @@ server.tool(
     noteUrl: z.string().describe('笔记 URL（通过笔记页面关注该作者）'),
   },
   async ({ noteUrl }: { noteUrl: string }) => {
+    await getGuard().verify('follow_author')
     logger.info(`Following author from note: ${noteUrl}`)
     try {
       const tools = new EngagementTools()
@@ -445,6 +467,7 @@ server.tool(
     keywords: z.array(z.string()).describe('要分析的关键词数组'),
   },
   async ({ keywords }: { keywords: string[] }) => {
+    await getGuard().verify('discover_trending')
     logger.info(`Discovering trending for ${keywords.length} keywords`)
     try {
       const tools = new AnalyticsTools()
@@ -464,6 +487,7 @@ server.tool(
   '分析最佳发布时间（基于历史笔记数据）',
   {},
   async () => {
+    await getGuard().verify('analyze_best_publish_time')
     logger.info('Analyzing best publish time')
     try {
       const tools = new AnalyticsTools()
@@ -485,6 +509,7 @@ server.tool(
     period: z.enum(['7days', '30days']).optional().describe('统计周期，默认近7日'),
   },
   async ({ period = '7days' }: { period?: string }) => {
+    await getGuard().verify('generate_content_report')
     logger.info(`Generating content report for period: ${period}`)
     try {
       const tools = new AnalyticsTools()
@@ -509,6 +534,7 @@ server.tool(
     limit: z.number().optional().describe('每个标签页返回的通知数量限制，默认20'),
   },
   async ({ tab, limit = 20 }: { tab?: 'comments' | 'likes' | 'follows'; limit?: number }) => {
+    await getGuard().verify('get_notifications')
     logger.info(`Getting notifications, tab: ${tab || 'all'}, limit: ${limit}`)
     try {
       const tools = new NotificationTools()
@@ -532,6 +558,7 @@ server.tool(
     noteId: z.string().describe('笔记 ID 或笔记 URL'),
   },
   async ({ noteId }: { noteId: string }) => {
+    await getGuard().verify('get_share_link')
     // Extract noteId from URL if a full URL was provided
     const idMatch = noteId.match(/explore\/([a-f0-9]+)/) || noteId.match(/^([a-f0-9]{24})$/)
     const extractedId = idMatch ? idMatch[1] : noteId
@@ -550,6 +577,13 @@ server.tool(
 // Start the server
 async function main() {
   logger.info('Starting RedNote MCP Server')
+
+  const guard = getGuard()
+  if (guard.hasKey()) {
+    logger.info('API Key configured, authentication enabled')
+  } else {
+    logger.warn('No PIGBUN_API_KEY found. Tools will require authentication.')
+  }
 
   // Register browser cleanup on process exit
   BrowserManager.registerProcessCleanup()
