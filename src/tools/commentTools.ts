@@ -5,6 +5,7 @@ import { RedNoteTools } from './rednoteTools'
 import { SELECTORS } from '../selectors'
 import {
   Comment,
+  CommentResult,
   ReplyCommentResult,
   SentimentCategory,
   CategorizedComment,
@@ -25,6 +26,67 @@ const SENTIMENT_KEYWORDS: Record<SentimentCategory, string[]> = {
 }
 
 export class CommentTools extends BaseTools {
+  async commentNote(options: {
+    noteUrl: string
+    content: string
+  }): Promise<CommentResult> {
+    logger.info(`Commenting on note: ${options.noteUrl}`)
+    const bm = BrowserManager.getInstance()
+    const lease = await bm.acquirePage()
+    try {
+      const page = lease.page
+      this.page = page
+
+      await page.goto(options.noteUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      })
+      await this.randomDelay(3, 5)
+
+      // Wait for comment input area to be available
+      // The input is initially covered by a placeholder overlay ("说点什么...")
+      // We need to click the overlay first to activate the real input
+      const placeholder = page.locator('.inner-when-not-active').first()
+      try {
+        await placeholder.waitFor({ state: 'visible', timeout: 20000 })
+        await this.safeClick(placeholder, '评论输入区域')
+        await this.randomDelay(0.5, 1)
+      } catch {
+        logger.warn('Placeholder overlay not found, trying input directly')
+      }
+
+      // Now the real input should be active
+      const commentInput = page.locator(SELECTORS.replyComment.replyInput).first()
+      await commentInput.waitFor({ state: 'visible', timeout: 5000 })
+      await commentInput.click({ force: true })
+      await this.randomDelay(0.3, 0.5)
+      await page.keyboard.type(options.content, { delay: 50 })
+      await this.randomDelay(0.5, 1)
+
+      // Wait for submit button to become active (loses .gray class after typing)
+      const submitBtn = page.locator('button.btn.submit:not(.gray)').first()
+      try {
+        await submitBtn.waitFor({ state: 'visible', timeout: 5000 })
+      } catch {
+        logger.warn('Submit button still gray, clicking anyway')
+      }
+      await this.safeClick(
+        submitBtn.or(page.locator(SELECTORS.replyComment.submitReply).first()),
+        '发送评论',
+      )
+      await this.randomDelay(1, 2)
+
+      logger.info('Comment posted successfully')
+      return { success: true, message: '评论发送成功' }
+    } catch (error) {
+      logger.error('Error commenting on note:', error)
+      throw error
+    } finally {
+      this.page = null
+      await lease.release()
+    }
+  }
+
   async replyComment(options: {
     noteUrl: string
     commentAuthor: string
@@ -43,10 +105,20 @@ export class CommentTools extends BaseTools {
         waitUntil: 'domcontentloaded',
         timeout: 30000
       })
-      await this.randomDelay(2, 3)
+      await this.randomDelay(3, 5)
+
+      // Debug: log page state before waiting for comments
+      const pageState = await page.evaluate(() => ({
+        url: window.location.href,
+        title: document.title,
+        hasNoteScroller: !!document.querySelector('.note-scroller'),
+        commentItemCount: document.querySelectorAll('.comment-item').length,
+        hasLoginPrompt: !!document.querySelector('.login-container'),
+      }))
+      logger.info(`Page state after navigation: ${JSON.stringify(pageState)}`)
 
       // Wait for comments to load
-      await page.waitForSelector(SELECTORS.replyComment.commentItem, { timeout: 15000 })
+      await page.waitForSelector(SELECTORS.replyComment.commentItem, { timeout: 20000 })
 
       // Search for the target comment with scrolling
       let found = false

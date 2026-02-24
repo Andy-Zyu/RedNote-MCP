@@ -305,6 +305,28 @@ server.tool(
 // === P0: Comment Tools ===
 
 server.tool(
+  'comment_note',
+  '在笔记下发表评论（一级评论）',
+  {
+    noteUrl: z.string().describe('笔记 URL（必须使用 search_notes 返回的完整链接，包含 xsec_token 参数）'),
+    content: z.string().describe('评论内容'),
+  },
+  async ({ noteUrl, content }: { noteUrl: string; content: string }) => {
+    logger.info(`Commenting on note: ${noteUrl}`)
+    try {
+      const tools = new CommentTools()
+      const result = await tools.commentNote({ noteUrl, content })
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+      }
+    } catch (error) {
+      logger.error('Error commenting on note:', error)
+      throw error
+    }
+  }
+)
+
+server.tool(
   'reply_comment',
   '回复笔记下的评论',
   {

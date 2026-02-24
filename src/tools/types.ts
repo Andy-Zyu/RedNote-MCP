@@ -191,10 +191,12 @@ export interface DeleteNoteResult {
 
 // === P0: Comments ===
 
-export interface ReplyCommentResult {
+export interface CommentResult {
   success: boolean
   message: string
 }
+
+export type ReplyCommentResult = CommentResult
 
 export type SentimentCategory = 'positive' | 'negative' | 'question' | 'suggestion' | 'neutral'
 

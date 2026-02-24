@@ -27,11 +27,12 @@ export class EngagementTools extends BaseTools {
       const likeWrapper = page.locator(SELECTORS.engagement.likeWrapper).first()
       await likeWrapper.waitFor({ state: 'visible', timeout: 10000 })
 
-      // Check current like state
-      const alreadyLiked = await likeWrapper.evaluate(
-        (el, cls) => el.classList.contains(cls),
-        SELECTORS.engagement.likeActiveClass,
-      )
+      // Check current like state via SVG icon href (#like = not liked, #liked = liked)
+      const alreadyLiked = await likeWrapper.evaluate((el) => {
+        const use = el.querySelector('svg use')
+        const href = use ? (use.getAttribute('xlink:href') || use.getAttribute('href')) : ''
+        return href === '#liked'
+      })
 
       if (alreadyLiked) {
         logger.info('Note is already liked')
@@ -42,11 +43,12 @@ export class EngagementTools extends BaseTools {
       await this.safeClick(likeWrapper, '点赞按钮')
       await this.randomDelay(1, 2)
 
-      // Verify the like took effect
-      const nowLiked = await likeWrapper.evaluate(
-        (el, cls) => el.classList.contains(cls),
-        SELECTORS.engagement.likeActiveClass,
-      )
+      // Verify the like took effect via SVG icon href
+      const nowLiked = await likeWrapper.evaluate((el) => {
+        const use = el.querySelector('svg use')
+        const href = use ? (use.getAttribute('xlink:href') || use.getAttribute('href')) : ''
+        return href === '#liked'
+      })
 
       if (nowLiked) {
         logger.info('Note liked successfully')
