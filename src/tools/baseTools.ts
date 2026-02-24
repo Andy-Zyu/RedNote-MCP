@@ -1,6 +1,7 @@
 import { Page, Locator } from 'playwright'
 import logger from '../utils/logger'
 import { BrowserManager, PageLease } from '../browser/browserManager'
+import { SELECTORS } from '../selectors'
 
 export abstract class BaseTools {
   protected page: Page | null = null
@@ -64,6 +65,40 @@ export abstract class BaseTools {
         throw error
       }
     }
+  }
+
+  /**
+   * Type a hashtag in the editor and select from the suggestion dropdown.
+   * The XHS TipTap editor shows a tippy popup with topic suggestions when
+   * you type `#`. We type the tag name, wait for the dropdown, and click
+   * the first suggestion to activate it as a real topic tag.
+   * Falls back to plain text + Space if no dropdown appears.
+   */
+  protected async typeAndSelectTag(page: Page, tag: string): Promise<void> {
+    logger.info(`Typing tag: #${tag}`)
+
+    // Type # to trigger the suggestion dropdown
+    await page.keyboard.type('#', { delay: 80 })
+    await new Promise(r => setTimeout(r, 500))
+
+    // Type the tag name to filter suggestions
+    await page.keyboard.type(tag, { delay: 80 })
+    await new Promise(r => setTimeout(r, 1500))
+
+    // Wait for suggestion dropdown and click first item
+    try {
+      const suggestionItem = page.locator(SELECTORS.publish.tagSuggestionItem).first()
+      await suggestionItem.waitFor({ state: 'visible', timeout: 3000 })
+      await suggestionItem.click({ timeout: 3000 })
+      logger.info(`Selected tag suggestion for: ${tag}`)
+      await new Promise(r => setTimeout(r, 300))
+    } catch {
+      // Fallback: no dropdown appeared, press Space to finalize as plain text
+      logger.warn(`No tag suggestion dropdown for "${tag}", falling back to plain text`)
+      await page.keyboard.press('Space')
+    }
+
+    await this.randomDelay(0.3, 0.5)
   }
 
   /**

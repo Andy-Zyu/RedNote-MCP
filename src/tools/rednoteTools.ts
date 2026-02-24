@@ -202,14 +202,11 @@ export class RedNoteTools extends BaseTools {
       }
       await this.randomDelay(0.5, 1)
 
-      // Add tags by typing #tag in the content editor
+      // Add tags by typing # and selecting from suggestion dropdown
       if (options.tags && options.tags.length > 0) {
         logger.info(`Adding ${options.tags.length} tags`)
         for (const tag of options.tags) {
-          await this.dismissTippyPopups()
-          await this.page.keyboard.type(`#${tag}`, { delay: 50 })
-          await this.page.keyboard.press('Space')
-          await this.randomDelay(0.3, 0.6)
+          await this.typeAndSelectTag(this.page, tag)
         }
         await this.dismissTippyPopups()
         logger.info(`Added ${options.tags.length} tags`)

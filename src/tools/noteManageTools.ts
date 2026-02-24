@@ -113,10 +113,7 @@ export class NoteManageTools extends BaseTools {
           await creatorPage.keyboard.press('End')
           await this.randomDelay(0.2, 0.4)
           for (const tag of options.tags) {
-            await this.dismissTippyPopups()
-            await creatorPage.keyboard.type(`#${tag}`, { delay: 50 })
-            await creatorPage.keyboard.press('Space')
-            await this.randomDelay(0.3, 0.6)
+            await this.typeAndSelectTag(creatorPage, tag)
           }
           await this.dismissTippyPopups()
         }

@@ -66,6 +66,9 @@ export const SELECTORS = {
     generateImageButton: 'div:has-text("生成图片"):not(:has(div))',
     publishButton: 'button:has-text("发布")',
     tippyRoot: '[data-tippy-root]',
+    tagSuggestionContainer: '#creator-editor-topic-container',
+    tagSuggestionItem: '#creator-editor-topic-container .item',
+    tagSuggestionSelected: '#creator-editor-topic-container .item.is-selected',
   },
 
   dashboard: {
