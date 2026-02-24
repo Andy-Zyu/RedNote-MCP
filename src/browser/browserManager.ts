@@ -123,7 +123,7 @@ export class BrowserManager {
 
   private async launchBrowser(): Promise<void> {
     logger.info('Launching browser')
-    this.browser = await chromium.launch({ headless: false })
+    this.browser = await chromium.launch({ headless: true })
 
     this.browser.on('disconnected', () => {
       logger.warn('Browser disconnected unexpectedly, clearing state')
