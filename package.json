@@ -1,21 +1,21 @@
 {
   "name": "@pigbun-ai/pigbun-rednote-mcp",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "A friendly tool to help you access and interact with Xiaohongshu (RedNote) content through Model Context Protocol.",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/cli.js",
   "bin": {
     "rednote-mcp": "./dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts",
+    "build": "node build.js",
+    "build:dev": "tsc",
+    "start": "node dist/cli.js",
+    "dev": "ts-node src/cli.ts",
     "test": "jest",
     "prepublishOnly": "npm run build"
   },
   "files": [
-    "dist",
+    "dist/cli.js",
     "README.md",
     "LICENSE"
   ],
@@ -34,6 +34,7 @@
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "@types/node": "^20.11.19",
+    "esbuild": "^0.27.3",
     "jest": "^29.7.0",
     "ts-jest": "^29.3.1",
     "ts-node": "^10.9.2",

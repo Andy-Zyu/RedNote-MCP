@@ -157,6 +157,82 @@ server.tool(
   }
 )
 
+server.tool(
+  'publish_note_video',
+  '发布小红书视频笔记（必须提供一个视频文件）',
+  {
+    title: z.string().describe('笔记标题（最多20字）'),
+    content: z.string().describe('笔记正文'),
+    video: z.string().describe('视频文件路径（本地绝对路径）'),
+    tags: z.array(z.string()).optional().describe('标签/话题数组'),
+  },
+  async ({ title, content, video, tags }: { title: string; content: string; video: string; tags?: string[] }) => {
+    await getGuard().verify('publish_note_video')
+    logger.info(`Publishing video note: ${title}`)
+    try {
+      const tools = new RedNoteTools()
+      const result = await tools.publishVideoNote({ title, content, video, tags })
+      logger.info(`Publish result: ${result.message}`)
+      return {
+        content: [{ type: 'text', text: result.message }]
+      }
+    } catch (error) {
+      logger.error('Error publishing video note:', error)
+      throw error
+    }
+  }
+)
+
+server.tool(
+  'publish_note_text',
+  '发布小红书纯文字笔记（无需图片或视频，自动生成封面图）',
+  {
+    title: z.string().describe('笔记标题（最多20字）'),
+    content: z.string().describe('笔记正文'),
+    tags: z.array(z.string()).optional().describe('标签/话题数组'),
+  },
+  async ({ title, content, tags }: { title: string; content: string; tags?: string[] }) => {
+    await getGuard().verify('publish_note_text')
+    logger.info(`Publishing text note: ${title}`)
+    try {
+      const tools = new RedNoteTools()
+      const result = await tools.publishTextNote({ title, content, tags })
+      logger.info(`Publish result: ${result.message}`)
+      return {
+        content: [{ type: 'text', text: result.message }]
+      }
+    } catch (error) {
+      logger.error('Error publishing text note:', error)
+      throw error
+    }
+  }
+)
+
+server.tool(
+  'publish_note_article',
+  '发布小红书长文笔记（适合长篇内容，标题无字数限制）',
+  {
+    title: z.string().describe('笔记标题'),
+    content: z.string().describe('笔记正文（支持长篇内容）'),
+    tags: z.array(z.string()).optional().describe('标签/话题数组'),
+  },
+  async ({ title, content, tags }: { title: string; content: string; tags?: string[] }) => {
+    await getGuard().verify('publish_note_article')
+    logger.info(`Publishing article: ${title}`)
+    try {
+      const tools = new RedNoteTools()
+      const result = await tools.publishArticle({ title, content, tags })
+      logger.info(`Publish result: ${result.message}`)
+      return {
+        content: [{ type: 'text', text: result.message }]
+      }
+    } catch (error) {
+      logger.error('Error publishing article:', error)
+      throw error
+    }
+  }
+)
+
 // Dashboard tools
 server.tool(
   'get_dashboard_overview',
@@ -519,6 +595,48 @@ server.tool(
       }
     } catch (error) {
       logger.error('Error generating content report:', error)
+      throw error
+    }
+  }
+)
+
+server.tool(
+  'get_inspiration_topics',
+  '获取笔记灵感话题（经典热门话题，含参与人数、浏览量和热门笔记示例）',
+  {
+    category: z.string().optional().describe('话题分类：美食、美妆、时尚、出行、知识、兴趣爱好。不传默认美食'),
+  },
+  async ({ category }: { category?: string }) => {
+    await getGuard().verify('get_inspiration_topics')
+    logger.info(`Getting inspiration topics for category: ${category || '美食'}`)
+    try {
+      const tools = new AnalyticsTools()
+      const result = await tools.getInspirationTopics(category)
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+      }
+    } catch (error) {
+      logger.error('Error getting inspiration topics:', error)
+      throw error
+    }
+  }
+)
+
+server.tool(
+  'get_activity_center',
+  '获取活动中心数据（官方活动列表，含流量扶持、活动奖励、参与话题等信息）',
+  {},
+  async () => {
+    await getGuard().verify('get_activity_center')
+    logger.info('Getting activity center data')
+    try {
+      const tools = new AnalyticsTools()
+      const result = await tools.getActivityCenter()
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+      }
+    } catch (error) {
+      logger.error('Error getting activity center:', error)
       throw error
     }
   }

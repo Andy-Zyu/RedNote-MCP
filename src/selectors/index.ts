@@ -54,6 +54,10 @@ export const SELECTORS = {
 
   publish: {
     publishLink: 'a[href*="creator.xiaohongshu.com/publish"]',
+    videoTab: [
+      'span.title:has-text("上传视频")',
+      'div:has-text("上传视频"):not(:has(div))',
+    ],
     imageTextTab: [
       'span.title:has-text("上传图文")',
       'div:has-text("上传图文"):not(:has(div))',

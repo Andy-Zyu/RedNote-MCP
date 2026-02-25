@@ -211,6 +211,53 @@ export interface FilterCommentsResult {
   summary: Record<SentimentCategory, number>
 }
 
+// === Inspiration ===
+
+export interface InspirationNote {
+  title: string
+  likes: string
+}
+
+export interface InspirationTopic {
+  name: string
+  participants: string
+  views: string
+  topNotes: InspirationNote[]
+}
+
+export interface InspirationResult {
+  category: string
+  topics: InspirationTopic[]
+}
+
+// === Activity Center ===
+
+export interface ActivityTopic {
+  id: string
+  name: string
+  link: string
+}
+
+export interface ActivityItem {
+  activityId: number
+  title: string
+  reward: string
+  startTime: string
+  endTime: string
+  status: string
+  pictureUrl: string
+  activityLink: string
+  postLink: string
+  topics: ActivityTopic[]
+  isFocused: boolean
+}
+
+export interface ActivityCenterResult {
+  activities: ActivityItem[]
+  totalCount: number
+  focusedCount: number
+}
+
 // === P0: Analytics ===
 
 export interface TrendingTopic {

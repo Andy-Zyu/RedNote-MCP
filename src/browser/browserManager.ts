@@ -2,9 +2,11 @@ import { Browser, BrowserContext, chromium, Page } from 'playwright'
 import { CookieManager } from '../auth/cookieManager'
 import * as path from 'path'
 import * as os from 'os'
+import * as fs from 'fs'
 import logger from '../utils/logger'
 
 const COOKIE_PATH = path.join(os.homedir(), '.mcp', 'rednote', 'cookies.json')
+const PROFILE_DIR = path.join(os.homedir(), '.mcp', 'rednote', 'browser-profile')
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
 export interface PageLease {
@@ -35,7 +37,7 @@ export class BrowserManager {
   async acquirePage(): Promise<PageLease> {
     this.clearIdleTimer()
 
-    if (!this.browser || !this.browser.isConnected()) {
+    if (!this.context) {
       await this.launchBrowser()
     }
 
@@ -90,6 +92,7 @@ export class BrowserManager {
     }
     this.activeLeases.clear()
 
+    // For persistent context, closing context also closes the browser
     if (this.context) {
       try {
         await this.context.close()
@@ -97,14 +100,6 @@ export class BrowserManager {
         logger.error('Error closing context:', err)
       }
       this.context = null
-    }
-
-    if (this.browser) {
-      try {
-        await this.browser.close()
-      } catch (err) {
-        logger.error('Error closing browser:', err)
-      }
       this.browser = null
     }
 
@@ -122,20 +117,41 @@ export class BrowserManager {
   }
 
   private async launchBrowser(): Promise<void> {
-    logger.info('Launching browser')
-    this.browser = await chromium.launch({ headless: true })
+    logger.info('Launching browser with persistent profile')
 
-    this.browser.on('disconnected', () => {
-      logger.warn('Browser disconnected unexpectedly, clearing state')
-      this.browser = null
-      this.context = null
-      this.activeLeases.clear()
-      this.clearIdleTimer()
+    // Ensure profile directory exists
+    if (!fs.existsSync(PROFILE_DIR)) {
+      fs.mkdirSync(PROFILE_DIR, { recursive: true })
+    }
+
+    // launchPersistentContext returns a BrowserContext directly (no separate Browser)
+    this.context = await chromium.launchPersistentContext(PROFILE_DIR, {
+      headless: true,
+      args: [
+        '--disable-blink-features=AutomationControlled',
+      ],
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     })
 
-    this.context = await this.browser.newContext()
+    // Get the underlying browser reference
+    this.browser = this.context.browser()
 
-    // Load cookies
+    // Hide webdriver property to avoid bot detection
+    await this.context.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
+    })
+
+    if (this.browser) {
+      this.browser.on('disconnected', () => {
+        logger.warn('Browser disconnected unexpectedly, clearing state')
+        this.browser = null
+        this.context = null
+        this.activeLeases.clear()
+        this.clearIdleTimer()
+      })
+    }
+
+    // Load cookies from file into persistent context (first time migration)
     const cookies = await this.cookieManager.loadCookies()
     if (cookies.length > 0) {
       logger.info(`Loading ${cookies.length} cookies into context`)

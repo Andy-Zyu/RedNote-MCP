@@ -9,6 +9,10 @@ import {
   TimeSlotPerformance,
   BestPublishTimeResult,
   ContentReport,
+  InspirationTopic,
+  InspirationResult,
+  ActivityItem,
+  ActivityCenterResult,
 } from './types'
 
 export class AnalyticsTools extends BaseTools {
@@ -215,6 +219,167 @@ export class AnalyticsTools extends BaseTools {
       },
       recommendations,
     }
+  }
+
+  async getInspirationTopics(category?: string): Promise<InspirationResult> {
+    const targetCategory = category || '美食'
+    logger.info(`Getting inspiration topics for category: ${targetCategory}`)
+
+    return this.withCreatorPage(
+      'https://creator.xiaohongshu.com/new/inspiration?source=official',
+      async (creatorPage) => {
+        await this.randomDelay(2, 3)
+
+        // Click the target category tab if not default
+        if (targetCategory !== '美食') {
+          const tab = creatorPage.locator(`.d-tabs-header:has-text("${targetCategory}")`).first()
+          if (await tab.count() > 0) {
+            await tab.click()
+            await this.randomDelay(2, 3)
+          } else {
+            logger.warn(`Category "${targetCategory}" not found, using default`)
+          }
+        }
+
+        // Parse topics from the page text
+        const pageText = await creatorPage.evaluate(() => {
+          const container = document.querySelector('.classic-topics-container, [class*="topics-container"]')
+          return container ? (container as HTMLElement).innerText : document.body.innerText
+        })
+
+        const topics = this.parseInspirationTopics(pageText)
+        logger.info(`Parsed ${topics.length} inspiration topics for ${targetCategory}`)
+
+        return {
+          category: targetCategory,
+          topics,
+        }
+      }
+    )
+  }
+
+  async getActivityCenter(): Promise<ActivityCenterResult> {
+    logger.info('Fetching activity center data')
+
+    return this.withCreatorPage(
+      'https://creator.xiaohongshu.com/new/events?source=official',
+      async (creatorPage) => {
+        // Intercept the activity_center/list API response
+        const apiPromise = creatorPage.waitForResponse(
+          res => res.url().includes('activity_center/list') && res.status() === 200,
+          { timeout: 30000 }
+        )
+
+        // Reload to ensure we capture the API call
+        await creatorPage.reload({ waitUntil: 'domcontentloaded' })
+
+        const response = await apiPromise
+        const json = await response.json()
+
+        if (!json.success || json.code !== 0) {
+          throw new Error(`Activity center API failed: ${json.msg || 'unknown error'}`)
+        }
+
+        const data = json.data
+        const rawList: any[] = data.activity_list || []
+        const focusTotal: number = data.focus_total || 0
+
+        const activities: ActivityItem[] = rawList.map((item: any) => {
+          const topics = (item.topic_infos || []).map((t: any) => ({
+            id: t.id || '',
+            name: t.name || '',
+            link: t.link || '',
+          }))
+
+          const startDate = item.start_time ? new Date(item.start_time).toISOString().split('T')[0] : ''
+          const endDate = item.end_time ? new Date(item.end_time).toISOString().split('T')[0] : ''
+
+          // activity_status: 1 = ongoing, 2 = ended, 0 = upcoming
+          let status = '进行中'
+          if (item.activity_status === 2) status = '已结束'
+          else if (item.activity_status === 0) status = '未开始'
+
+          return {
+            activityId: item.activity_id || 0,
+            title: topics.length > 0 ? topics[0].name : `活动${item.activity_id}`,
+            reward: item.activity_reward || '',
+            startTime: startDate,
+            endTime: endDate,
+            status,
+            pictureUrl: item.picture_link || '',
+            activityLink: item.activity_link || '',
+            postLink: item.pc_post_link || '',
+            topics,
+            isFocused: item.focus_status === 1,
+          }
+        })
+
+        logger.info(`Fetched ${activities.length} activities (${focusTotal} focused)`)
+        return {
+          activities,
+          totalCount: activities.length,
+          focusedCount: focusTotal,
+        }
+      }
+    )
+  }
+
+  private parseInspirationTopics(text: string): InspirationTopic[] {
+    const topics: InspirationTopic[] = []
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+
+    // Skip header lines (经典话题, description, category tabs)
+    let i = 0
+    // Skip until we find a topic name (followed by participants line)
+    while (i < lines.length) {
+      // A topic block looks like:
+      //   话题名
+      //   28.4万人参与 · 13.8亿次浏览
+      //   6.8万
+      //   笔记标题1
+      //   8477
+      //   笔记标题2
+      //   ...
+      const participantsMatch = i + 1 < lines.length && lines[i + 1].match(/[\d.]+万?人参与/)
+      if (participantsMatch) {
+        const name = lines[i]
+        const statsLine = lines[i + 1]
+        const pMatch = statsLine.match(/([\d.]+万?)人参与/)
+        const vMatch = statsLine.match(/([\d.]+[万亿]?)次浏览/)
+        const participants = pMatch ? pMatch[1] : ''
+        const views = vMatch ? vMatch[1] : ''
+
+        // Parse top notes (pairs of likes + title, or title + likes)
+        const topNotes: { title: string; likes: string }[] = []
+        let j = i + 2
+        while (j < lines.length && topNotes.length < 4) {
+          // Check if next line is a participants line (start of new topic)
+          if (j + 1 < lines.length && lines[j + 1].match(/[\d.]+万?人参与/)) break
+
+          const likesStr = lines[j]
+          // Likes line is a number like "6.8万" or "8477"
+          if (likesStr.match(/^[\d.]+万?$/)) {
+            // Next line should be the title
+            if (j + 1 < lines.length) {
+              topNotes.push({ title: lines[j + 1], likes: likesStr })
+              j += 2
+            } else {
+              j++
+            }
+          } else {
+            // Could be a title followed by likes, or just skip
+            j++
+          }
+        }
+
+        topics.push({ name, participants, views, topNotes })
+        i = j
+      } else {
+        i++
+      }
+    }
+
+    return topics
   }
 
   private parseMetric(value: string | number | undefined): number {

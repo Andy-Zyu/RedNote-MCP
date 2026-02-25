@@ -1,4 +1,4 @@
-import { Page } from 'playwright'
+import { Page, Response } from 'playwright'
 import { BaseInterceptor } from './baseInterceptor'
 import { Note } from '../tools/types'
 import logger from '../utils/logger'
@@ -14,8 +14,36 @@ export class SearchInterceptor extends BaseInterceptor<Note[]> {
   }
 
   matchUrl(url: string): boolean {
-    // Must match /search/notes specifically, not /search/onebox or other search endpoints
     return url.includes('/api/sns/web/v1/search/notes')
+  }
+
+  matchResponse(response: Response): boolean {
+    // The search API is a POST request with keyword in the JSON body.
+    // Verify the request carries the correct keyword to avoid capturing
+    // unrelated responses (e.g. recommendations or preloaded results).
+    try {
+      const postData = response.request().postData()
+      if (postData) {
+        const body = JSON.parse(postData)
+        if (body.keyword && body.keyword !== this.keywords) {
+          logger.debug(`Skipping search response with mismatched keyword: "${body.keyword}" (expected "${this.keywords}")`)
+          return false
+        }
+      }
+    } catch {
+      // Not JSON or no post data — also check URL query params as fallback
+      try {
+        const u = new URL(response.url())
+        const keyword = u.searchParams.get('keyword')
+        if (keyword && keyword !== this.keywords) {
+          logger.debug(`Skipping search response with mismatched URL keyword: "${keyword}" (expected "${this.keywords}")`)
+          return false
+        }
+      } catch {
+        // URL parsing failed — accept the response
+      }
+    }
+    return true
   }
 
   parseResponse(json: unknown): Note[] {

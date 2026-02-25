@@ -20,6 +20,14 @@ export abstract class BaseInterceptor<T> {
   abstract parseResponse(json: unknown): T
   abstract fallbackDom(): Promise<T>
 
+  /**
+   * Optional hook to validate the full Response object (e.g. check POST body).
+   * Called after matchUrl succeeds. Override in subclasses for extra checks.
+   */
+  matchResponse(_response: Response): boolean {
+    return true
+  }
+
   async intercept(triggerAction: () => Promise<void>): Promise<InterceptResult<T>> {
     let settled = false
     let handler: ((response: Response) => void) | null = null
@@ -41,6 +49,7 @@ export abstract class BaseInterceptor<T> {
         if (settled) return
         if (response.status() !== 200) return
         if (!this.matchUrl(response.url())) return
+        if (!this.matchResponse(response)) return
 
         try {
           const json = await response.json()
