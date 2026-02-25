@@ -153,10 +153,13 @@ export class BrowserManager {
 
     // Load cookies from file into persistent context (first time migration)
     const cookies = await this.cookieManager.loadCookies()
-    if (cookies.length > 0) {
-      logger.info(`Loading ${cookies.length} cookies into context`)
-      await this.context.addCookies(cookies)
+    if (cookies.length === 0) {
+      throw new Error(
+        '未检测到登录信息，请先调用 login 工具扫码登录小红书账号。'
+      )
     }
+    logger.info(`Loading ${cookies.length} cookies into context`)
+    await this.context.addCookies(cookies)
   }
 
   private resetIdleTimer(): void {
