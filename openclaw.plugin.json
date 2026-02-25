@@ -1,0 +1,22 @@
+{
+  "id": "pigbun-rednote",
+  "name": "PigBun RedNote",
+  "description": "小红书 AI 运营工具 - 搜索、发布、分析、互动",
+  "version": "0.7.1",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "apiKey": { "type": "string" }
+    },
+    "required": ["apiKey"]
+  },
+  "uiHints": {
+    "apiKey": {
+      "label": "PigBun API Key",
+      "sensitive": true,
+      "placeholder": "pb_live_...",
+      "help": "Get your API key at https://pigbunai.com"
+    }
+  }
+}
