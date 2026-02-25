@@ -41,6 +41,7 @@ export class CommentTools extends BaseTools {
         waitUntil: 'domcontentloaded',
         timeout: 30000,
       })
+      this.checkCaptchaRedirect(page)
       await this.randomDelay(3, 5)
 
       // Wait for comment input area to be available
@@ -105,6 +106,7 @@ export class CommentTools extends BaseTools {
         waitUntil: 'domcontentloaded',
         timeout: 30000
       })
+      this.checkCaptchaRedirect(page)
       await this.randomDelay(3, 5)
 
       // Debug: log page state before waiting for comments

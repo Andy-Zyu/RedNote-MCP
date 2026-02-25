@@ -19,6 +19,7 @@ export class EngagementTools extends BaseTools {
         waitUntil: 'domcontentloaded',
         timeout: 30000,
       })
+      this.checkCaptchaRedirect(page)
       await this.randomDelay(2, 3)
 
       // Wait for the engage bar to appear
@@ -79,6 +80,7 @@ export class EngagementTools extends BaseTools {
         waitUntil: 'domcontentloaded',
         timeout: 30000,
       })
+      this.checkCaptchaRedirect(page)
       await this.randomDelay(2, 3)
 
       // Wait for the engage bar to appear
@@ -146,6 +148,7 @@ export class EngagementTools extends BaseTools {
         waitUntil: 'domcontentloaded',
         timeout: 30000,
       })
+      this.checkCaptchaRedirect(page)
       await this.randomDelay(2, 3)
 
       // Wait for the follow button to appear (use last() since first container may be hidden)

@@ -51,6 +51,7 @@ export class RedNoteTools extends BaseTools {
           `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(keywords)}`,
           { waitUntil: 'domcontentloaded', timeout: 30000 }
         )
+        this.checkCaptchaRedirect(lease.page)
       })
 
       if (result.success && result.data) {
@@ -77,6 +78,7 @@ export class RedNoteTools extends BaseTools {
       const interceptor = new NoteDetailInterceptor(lease.page, actualURL)
       const result = await interceptor.intercept(async () => {
         await lease.page.goto(actualURL, { waitUntil: 'domcontentloaded', timeout: 30000 })
+        this.checkCaptchaRedirect(lease.page)
       })
 
       if (result.success && result.data) {
@@ -101,6 +103,7 @@ export class RedNoteTools extends BaseTools {
       const interceptor = new NoteCommentsInterceptor(lease.page)
       const result = await interceptor.intercept(async () => {
         await lease.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
+        this.checkCaptchaRedirect(lease.page)
       })
 
       if (result.success && result.data) {

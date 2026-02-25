@@ -26,6 +26,7 @@ export class NotificationTools extends BaseTools {
         waitUntil: 'domcontentloaded',
         timeout: 30000,
       })
+      this.checkCaptchaRedirect(page)
       await this.randomDelay(3, 5)
 
       // Wait for the notification page to load

@@ -102,6 +102,19 @@ export abstract class BaseTools {
   }
 
   /**
+   * Check if the current page has been redirected to a captcha/anti-bot page.
+   * If so, throw an error telling the Agent to re-login.
+   */
+  protected checkCaptchaRedirect(page: Page): void {
+    const url = page.url()
+    if (url.includes('/website-login/captcha') || url.includes('verifyType=')) {
+      throw new Error(
+        '当前会话已被小红书风控拦截，请先调用 login 工具重新登录后再试。'
+      )
+    }
+  }
+
+  /**
    * Navigate to a creator center page via SSO.
    * Creator subdomain requires SSO — we must first visit the main site,
    * click the publish link (which triggers SSO in a new tab), then navigate
@@ -115,6 +128,7 @@ export abstract class BaseTools {
       timeout: 30000
     })
     logger.info('Main site loaded for SSO trigger')
+    this.checkCaptchaRedirect(page)
 
     const publishLink = page.locator('a[href*="creator.xiaohongshu.com/publish"]')
     if (await publishLink.count() === 0) {
