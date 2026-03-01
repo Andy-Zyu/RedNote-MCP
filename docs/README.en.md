@@ -51,7 +51,7 @@ Works with Claude Desktop, Cursor, Windsurf, Claude Code, and any MCP-compatible
 
 Replace `pb_live_your_key_here` with the API Key from your Dashboard.
 
-## Tools
+## Tools (27 total)
 
 ### Search & Content
 
@@ -60,7 +60,15 @@ Replace `pb_live_your_key_here` with the API Key from your Dashboard.
 | `search_notes` | Search notes by keyword (returns links with xsec_token) |
 | `get_note_content` | Get note details (title, body, images, videos, etc.) |
 | `get_note_comments` | Get comment list for a note |
+
+### Publishing
+
+| Tool | Description |
+|------|-------------|
 | `publish_note` | Publish image-text note (at least one image required) |
+| `publish_note_video` | Publish video note |
+| `publish_note_text` | Publish text-only note (auto-generates cover image) |
+| `publish_note_article` | Publish long-form article (no title length limit) |
 
 ### Note Management
 
@@ -96,6 +104,8 @@ Replace `pb_live_your_key_here` with the API Key from your Dashboard.
 | `discover_trending` | Discover trending topics (multi-keyword comparison) |
 | `analyze_best_publish_time` | Analyze best publishing times |
 | `generate_content_report` | Generate comprehensive operations report |
+| `get_inspiration_topics` | Get inspiration topics (with participant count, views, and top note examples) |
+| `get_activity_center` | Get official activity list (traffic boosts, rewards, topics) |
 
 ### Other
 
@@ -107,11 +117,23 @@ Replace `pb_live_your_key_here` with the API Key from your Dashboard.
 
 ## Publishing Notes
 
+Four publishing modes are supported:
+
+| Mode | Tool | Description |
+|------|------|-------------|
+| Image-text | `publish_note` | At least one image, title max 20 chars |
+| Video | `publish_note_video` | Provide one video file |
+| Text-only | `publish_note_text` | No images needed, auto-generates cover |
+| Article | `publish_note_article` | Long-form content, no title length limit |
+
+Common parameters:
+
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `title` | string | ✅ | Title (max 20 chars) |
+| `title` | string | ✅ | Title |
 | `content` | string | ✅ | Body text |
-| `images` | string[] | ✅ | Local image file paths (at least 1 required) |
+| `images` | string[] | Image-text only | Local image file paths |
+| `video` | string | Video only | Local video file path |
 | `tags` | string[] | ❌ | Hashtags |
 | `keepAlive` | boolean | ❌ | Keep browser open for batch publishing |
 

@@ -18,7 +18,7 @@ import logger from '../utils/logger'
 
 export default function register(api: any) {
   // Read API Key from plugin config and inject into env
-  const config = api.config?.plugins?.entries?.['pigbun-rednote']?.config
+  const config = api.config?.plugins?.entries?.['pigbun-rednote-mcp']?.config
   if (config?.apiKey && !process.env.PIGBUN_API_KEY) {
     process.env.PIGBUN_API_KEY = config.apiKey
   }

@@ -51,7 +51,7 @@ npx @pigbun-ai/pigbun-rednote-mcp init
 
 将 `pb_live_your_key_here` 替换为你在 Dashboard 中获取的 API Key。
 
-## 功能
+## 功能（27 个工具）
 
 ### 搜索与内容
 
@@ -60,7 +60,15 @@ npx @pigbun-ai/pigbun-rednote-mcp init
 | `search_notes` | 关键词搜索笔记（返回含 xsec_token 的链接） |
 | `get_note_content` | 获取笔记详情（标题、正文、图片、视频等） |
 | `get_note_comments` | 获取笔记评论列表 |
+
+### 发布笔记
+
+| 工具 | 说明 |
+|------|------|
 | `publish_note` | 发布图文笔记（至少一张图片） |
+| `publish_note_video` | 发布视频笔记 |
+| `publish_note_text` | 发布纯文字笔记（自动生成封面图） |
+| `publish_note_article` | 发布长文笔记（标题无字数限制） |
 
 ### 笔记管理
 
@@ -96,6 +104,8 @@ npx @pigbun-ai/pigbun-rednote-mcp init
 | `discover_trending` | 发现热门话题（多关键词热度对比） |
 | `analyze_best_publish_time` | 分析最佳发布时间 |
 | `generate_content_report` | 生成综合运营报告 |
+| `get_inspiration_topics` | 获取笔记灵感话题（含参与人数、浏览量、热门笔记示例） |
+| `get_activity_center` | 获取官方活动列表（流量扶持、活动奖励、参与话题） |
 
 ### 其他
 
@@ -107,11 +117,23 @@ npx @pigbun-ai/pigbun-rednote-mcp init
 
 ## 发布笔记
 
+支持四种发布方式：
+
+| 方式 | 工具 | 说明 |
+|------|------|------|
+| 图文 | `publish_note` | 至少一张图片，标题最多 20 字 |
+| 视频 | `publish_note_video` | 提供一个视频文件 |
+| 纯文字 | `publish_note_text` | 无需图片，自动生成封面 |
+| 长文 | `publish_note_article` | 适合长篇内容，标题无字数限制 |
+
+通用参数：
+
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `title` | string | ✅ | 标题（最多 20 字） |
+| `title` | string | ✅ | 标题 |
 | `content` | string | ✅ | 正文 |
-| `images` | string[] | ✅ | 图片路径数组（本地绝对路径，至少 1 张） |
+| `images` | string[] | 图文必填 | 图片路径数组（本地绝对路径） |
+| `video` | string | 视频必填 | 视频文件路径（本地绝对路径） |
 | `tags` | string[] | ❌ | 标签数组 |
 | `keepAlive` | boolean | ❌ | 发布后保持浏览器（连续发布时使用） |
 
