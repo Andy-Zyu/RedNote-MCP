@@ -1,9 +1,19 @@
 {
   "mcpServers": {
-    "rednote-mcp-test": {
+    "rednote-mcp-dev": {
       "command": "node",
       "args": [
         "/Volumes/SSD-990-PRO-2TB/RedNote-MCP/dist/cli.js",
+        "--stdio"
+      ],
+      "env": {
+        "PIGBUN_API_KEY": "pb_live_9a72fed26d5ea25488ce4f71588f963723345f208a604e0e5980d94b96be54e6"
+      }
+    },
+    "rednote-mcp-prod": {
+      "command": "node",
+      "args": [
+        "/Users/zhuyanan/rednote-mcp-prod/dist/cli.js",
         "--stdio"
       ],
       "env": {

@@ -1062,22 +1062,115 @@ async function main() {
 
   // Auto-start Matrix server in background AFTER MCP server is running
   let matrixServer: any = null
-  setImmediate(() => {
-    startMatrixServer(3001)
-      .then((server) => {
-        matrixServer = server
+  let isStartingMatrixServer = false
+  let matrixServerHealthCheckInterval: NodeJS.Timeout | null = null
+  let consecutiveFailures = 0
+  const MAX_CONSECUTIVE_FAILURES = 3 // 连续失败3次才触发重启
+  const HEALTH_CHECK_INTERVAL = 30000 // 30秒检查一次
+
+  /**
+   * 检查Matrix Server健康状态
+   */
+  async function checkMatrixServerHealth(): Promise<boolean> {
+    try {
+      const response = await fetch('http://localhost:3001/api/health', {
+        signal: AbortSignal.timeout(5000) // 5秒超时
+      })
+      return response.ok
+    } catch (error) {
+      return false
+    }
+  }
+
+  /**
+   * 尝试启动Matrix Server（带重试）
+   */
+  async function tryStartMatrixServer(retries = 3): Promise<any> {
+    if (isStartingMatrixServer) {
+      logger.debug('Matrix server is already being started, skipping')
+      return null
+    }
+
+    isStartingMatrixServer = true
+
+    for (let i = 0; i < retries; i++) {
+      try {
+        logger.info(`Attempting to start Matrix server (attempt ${i + 1}/${retries})`)
+        const server = await startMatrixServer(3001)
+        isStartingMatrixServer = false
+        consecutiveFailures = 0
         logger.info('Matrix server started successfully on http://localhost:3001')
-      })
-      .catch((error: any) => {
+        return server
+      } catch (error: any) {
         if (error.code === 'EADDRINUSE') {
-          logger.info('Matrix server already running on port 3001')
-        } else {
-          logger.warn('Failed to start Matrix server, continuing without it', {
-            error: error.message,
-            code: error.code
-          })
+          logger.debug('Matrix server already running on port 3001')
+          isStartingMatrixServer = false
+          return null
         }
-      })
+
+        logger.warn(`Failed to start Matrix server (attempt ${i + 1}/${retries})`, {
+          error: error.message,
+          code: error.code
+        })
+
+        // 等待端口释放
+        if (i < retries - 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000))
+        }
+      }
+    }
+
+    isStartingMatrixServer = false
+    logger.error('Failed to start Matrix server after all retries')
+    return null
+  }
+
+  // 初始启动
+  setImmediate(async () => {
+    matrixServer = await tryStartMatrixServer()
+
+    // 启动健康检查（仅在矩阵模式下）
+    if (isMatrixMode) {
+      matrixServerHealthCheckInterval = setInterval(async () => {
+        const isHealthy = await checkMatrixServerHealth()
+
+        if (!isHealthy) {
+          consecutiveFailures++
+          logger.warn(`Matrix server health check failed (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES})`)
+
+          if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+            logger.warn('Matrix server appears to be down, attempting to restart...')
+
+            // 清理旧的server引用
+            if (matrixServer) {
+              try {
+                matrixServer.close()
+              } catch (e) {
+                // Ignore
+              }
+              matrixServer = null
+            }
+
+            // 尝试重新启动
+            matrixServer = await tryStartMatrixServer()
+
+            if (matrixServer) {
+              logger.info('Matrix server successfully restarted')
+            } else {
+              logger.error('Failed to restart Matrix server, will retry on next health check')
+            }
+          }
+        } else {
+          // 健康检查通过，重置失败计数
+          if (consecutiveFailures > 0) {
+            logger.info('Matrix server health check passed, resetting failure count')
+            consecutiveFailures = 0
+          }
+        }
+      }, HEALTH_CHECK_INTERVAL)
+
+      logger.info('Matrix server health monitoring started (check every 30s)')
+    }
   })
 
   // Start subscription monitor
@@ -1107,6 +1200,9 @@ async function main() {
   process.on('exit', () => {
     logger.info('Process exiting', { uptime: process.uptime() })
     clearInterval(heartbeatInterval)
+    if (matrixServerHealthCheckInterval) {
+      clearInterval(matrixServerHealthCheckInterval)
+    }
     stopLogging()
     subscriptionMonitor.stop()
     if (matrixServer) {
@@ -1121,6 +1217,9 @@ async function main() {
   process.on('SIGINT', () => {
     logger.info('Received SIGINT, shutting down gracefully')
     clearInterval(heartbeatInterval)
+    if (matrixServerHealthCheckInterval) {
+      clearInterval(matrixServerHealthCheckInterval)
+    }
     subscriptionMonitor.stop()
     if (matrixServer) {
       try {
@@ -1135,6 +1234,9 @@ async function main() {
   process.on('SIGTERM', () => {
     logger.info('Received SIGTERM, shutting down gracefully')
     clearInterval(heartbeatInterval)
+    if (matrixServerHealthCheckInterval) {
+      clearInterval(matrixServerHealthCheckInterval)
+    }
     subscriptionMonitor.stop()
     if (matrixServer) {
       try {
