@@ -2,8 +2,19 @@ node_modules/
 dist/
 .env
 cookies.json
+coverage/
 *.log
 .cursor
 logs/
 .npmrc
 .mcp.json
+
+# Playwright
+playwright-report/
+playwright-results.xml
+playwright-results.json
+test-results/
+playwright/.cache/
+
+# E2E test data
+__tests__/e2e/.test-data/

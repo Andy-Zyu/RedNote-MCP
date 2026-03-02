@@ -166,10 +166,11 @@ export abstract class BaseTools {
    */
   protected async withCreatorPage<T>(
     targetUrl: string,
-    callback: (creatorPage: Page) => Promise<T>
+    callback: (creatorPage: Page) => Promise<T>,
+    accountId?: string,
   ): Promise<T> {
     const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage()
+    const lease = await bm.acquirePage(accountId)
     let creatorPage: Page | null = null
     try {
       creatorPage = await this.navigateToCreator(lease, targetUrl)

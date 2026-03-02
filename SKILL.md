@@ -10,9 +10,13 @@
 
 1. 从 [pigbunai.com](https://pigbunai.com) 获取免费 API Key（每天 50 次调用）
 2. 安装 Playwright：`npx playwright install chromium`
-3. 首次使用前运行 `openclaw rednote init` 扫码登录小红书
+3. 首次使用前登录小红书：
+   - 单账号模式：`openclaw rednote init`
+   - 多账号模式：`openclaw rednote matrix`（启动管理界面）
 
 ## 工具列表
+
+所有工具在多账号模式下支持可选的 `accountId` 参数。单账号模式下此参数不可见。
 
 ### 搜索与内容获取
 
@@ -78,6 +82,8 @@
 
 ## 使用示例
 
+### 单账号模式
+
 搜索笔记：
 ```
 搜索关键词"咖啡推荐"的热门笔记
@@ -97,6 +103,24 @@
 ```
 帮我查看最新笔记的评论，筛选出提问类评论并逐一回复
 ```
+
+### 多账号模式
+
+在多账号模式下，可以通过 `accountId` 参数指定操作的账号：
+
+```
+使用账号 acc_xxx_xxxx 搜索关键词"咖啡推荐"的笔记
+```
+
+```
+用账号 acc_yyy_yyyy 发布一篇笔记，标题"今日分享"，内容"这是测试内容"
+```
+
+```
+查看账号 acc_xxx_xxxx 最近 7 天的数据总览
+```
+
+如果不指定 `accountId`，将使用默认账号。
 
 ## 配置
 

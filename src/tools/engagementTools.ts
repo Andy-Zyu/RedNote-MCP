@@ -5,12 +5,12 @@ import { SELECTORS } from '../selectors'
 import { LikeNoteResult, CollectNoteResult, FollowAuthorResult } from './types'
 
 export class EngagementTools extends BaseTools {
-  async likeNote(noteUrl: string): Promise<LikeNoteResult> {
+  async likeNote(noteUrl: string, accountId?: string): Promise<LikeNoteResult> {
     const url = this.extractRedBookUrl(noteUrl)
     logger.info(`Liking note: ${url}`)
 
     const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage()
+    const lease = await bm.acquirePage(accountId)
     try {
       const page = lease.page
       this.page = page
@@ -66,12 +66,12 @@ export class EngagementTools extends BaseTools {
     }
   }
 
-  async collectNote(noteUrl: string): Promise<CollectNoteResult> {
+  async collectNote(noteUrl: string, accountId?: string): Promise<CollectNoteResult> {
     const url = this.extractRedBookUrl(noteUrl)
     logger.info(`Collecting note: ${url}`)
 
     const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage()
+    const lease = await bm.acquirePage(accountId)
     try {
       const page = lease.page
       this.page = page
@@ -134,12 +134,12 @@ export class EngagementTools extends BaseTools {
     }
   }
 
-  async followAuthor(noteUrl: string): Promise<FollowAuthorResult> {
+  async followAuthor(noteUrl: string, accountId?: string): Promise<FollowAuthorResult> {
     const url = this.extractRedBookUrl(noteUrl)
     logger.info(`Following author from note: ${url}`)
 
     const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage()
+    const lease = await bm.acquirePage(accountId)
     try {
       const page = lease.page
       this.page = page

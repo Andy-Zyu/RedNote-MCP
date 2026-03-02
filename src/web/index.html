@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PigBun-AI - 小红书多账号管理</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            mint: '#6ECFBD',
+            'mint-light': '#A8E6CF',
+            'mint-dark': '#4DB8A4',
+            pink: '#FFB7C5',
+            'pink-deep': '#FF8FA3',
+            yellow: '#FFE066',
+            'yellow-warm': '#FFD23F',
+            purple: '#C5A3FF',
+            'purple-deep': '#A07BE5',
+            sky: '#87CEEB',
+            'sky-deep': '#5BB5D5',
+            coral: '#FF9A76',
+            bg: '#EEEAFF',
+            'bg-warm': '#FFF8F0',
+            surface: '#FFFFFF',
+            dark: '#1A1A2E',
+            'dark-light': '#2E2E48',
+            'text-muted': '#4A4A6A',
+            'text-light': '#7A7A9A',
+          },
+          fontFamily: {
+            display: ['Fredoka', 'system-ui', 'sans-serif'],
+            body: ['Nunito', 'system-ui', 'sans-serif'],
+          },
+          boxShadow: {
+            'brutal-sm': '2px 2px 0px #1A1A2E',
+            'brutal-md': '4px 4px 0px #1A1A2E',
+            'brutal-lg': '6px 6px 0px #1A1A2E',
+            'brutal-xl': '8px 8px 0px #1A1A2E',
+          },
+          animation: {
+            'wiggle': 'wiggle 3s ease-in-out infinite',
+            'bob': 'bob 2.5s ease-in-out infinite',
+          },
+          keyframes: {
+            wiggle: {
+              '0%, 100%': { transform: 'rotate(-3deg)' },
+              '50%': { transform: 'rotate(3deg)' },
+            },
+            bob: {
+              '0%, 100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-6px)' },
+            },
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Nunito', system-ui, sans-serif;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      font-family: 'Fredoka', system-ui, sans-serif;
+    }
+    .brutalist-card {
+      background-color: #FFFFFF;
+      border: 3px solid #1A1A2E;
+      transition: box-shadow 0.2s ease, transform 0.2s ease;
+    }
+    .brutalist-card:hover {
+      box-shadow: 6px 6px 0px #1A1A2E;
+      transform: translate(-2px, -2px);
+    }
+    *:focus-visible {
+      outline: 3px solid #1A1A2E;
+      outline-offset: 2px;
+    }
+    @keyframes scale-in {
+      0% {
+        opacity: 0;
+        transform: scale(0.9);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .animate-wiggle,
+      .animate-bob,
+      .animate-spin {
+        animation: none;
+      }
+      .brutalist-card {
+        transition: none;
+      }
+    }
+  </style>
+</head>
+<body class="bg-bg">
+  <div id="root"></div>
+  <script type="text/babel" src="./app.js"></script>
+</body>
+</html>

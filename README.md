@@ -25,15 +25,29 @@ npx playwright install chromium
 
 ### 3. 初始化登录
 
+#### 单账号模式（默认）
+
 ```bash
 npx @pigbun-ai/pigbun-rednote-mcp init
 ```
 
 会打开浏览器，手动完成小红书登录。Cookie 自动保存到 `~/.mcp/rednote/cookies.json`。
 
+#### 多账号模式
+
+```bash
+# 启动多账号管理界面
+npx @pigbun-ai/pigbun-rednote-mcp matrix
+
+# 在浏览器中访问 http://localhost:3001
+# 可以添加多个账号、扫码登录、自定义命名
+```
+
 ### 4. 配置 MCP 客户端
 
 适用于 Claude Desktop、Cursor、Windsurf、Claude Code 等支持 MCP 的客户端：
+
+#### 单账号模式
 
 ```json
 {
@@ -49,9 +63,27 @@ npx @pigbun-ai/pigbun-rednote-mcp init
 }
 ```
 
+#### 多账号模式
+
+```json
+{
+  "mcpServers": {
+    "pigbun-rednote-mcp": {
+      "command": "npx",
+      "args": ["@pigbun-ai/pigbun-rednote-mcp@latest", "--stdio", "--matrix"],
+      "env": {
+        "PIGBUN_API_KEY": "pb_live_your_key_here"
+      }
+    }
+  }
+}
+```
+
 将 `pb_live_your_key_here` 替换为你在 Dashboard 中获取的 API Key。
 
 ## 功能（27 个工具）
+
+所有工具在多账号模式下支持可选的 `accountId` 参数，用于指定操作的账号。单账号模式下无需提供此参数。
 
 ### 搜索与内容
 
@@ -174,12 +206,37 @@ npx @pigbun-ai/pigbun-rednote-mcp init
 
 返回：总粉丝、新增、流失、粉丝画像、活跃粉丝。
 
+## 多账号使用
+
+在多账号模式下，所有工具都支持可选的 `accountId` 参数：
+
+```
+# 使用默认账号搜索
+搜索关键词"咖啡"的笔记
+
+# 使用指定账号搜索
+使用账号 acc_xxx_xxxx 搜索关键词"咖啡"的笔记
+
+# 使用指定账号发布笔记
+使用账号 acc_yyy_yyyy 发布一篇笔记，标题"今日分享"
+```
+
+获取账号列表：
+```bash
+# 通过 Matrix 管理界面查看
+curl http://localhost:3001/api/accounts
+```
+
 ## 调试
 
 使用 MCP Inspector：
 
 ```bash
+# 单账号模式
 PIGBUN_API_KEY=pb_live_xxx npx @modelcontextprotocol/inspector npx @pigbun-ai/pigbun-rednote-mcp --stdio
+
+# 多账号模式
+PIGBUN_API_KEY=pb_live_xxx npx @modelcontextprotocol/inspector npx @pigbun-ai/pigbun-rednote-mcp --stdio --matrix
 ```
 
 ## 注意事项

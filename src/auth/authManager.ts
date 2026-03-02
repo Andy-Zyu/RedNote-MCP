@@ -1,5 +1,6 @@
-import {Browser, BrowserContext, chromium, Cookie, Page} from 'playwright';
-import {CookieManager} from './cookieManager';
+import { Browser, BrowserContext, chromium, Cookie, Page } from 'playwright';
+import { CookieManager } from './cookieManager';
+import { AccountManager, accountManager } from './accountManager';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -8,20 +9,27 @@ import logger from '../utils/logger';
 
 dotenv.config();
 
+export interface LoginOptions {
+  timeout?: number;
+  accountId?: string;
+}
+
 export class AuthManager {
   private browser: Browser | null;
   private context: BrowserContext | null;
   private page: Page | null;
   private cookieManager: CookieManager;
+  private accountId?: string;
 
-  constructor(cookiePath?: string) {
+  constructor(cookiePath?: string, accountId?: string) {
     logger.info('Initializing AuthManager');
     this.browser = null;
     this.context = null;
     this.page = null;
+    this.accountId = accountId;
 
-    // Set default cookie path to ~/.mcp/rednote/cookies.json
-    if (!cookiePath) {
+    // 如果没有 accountId，使用默认路径（兼容旧模式）
+    if (!accountId && !cookiePath) {
       const homeDir = os.homedir();
       const mcpDir = path.join(homeDir, '.mcp');
       const rednoteDir = path.join(mcpDir, 'rednote');
@@ -39,8 +47,8 @@ export class AuthManager {
       cookiePath = path.join(rednoteDir, 'cookies.json');
     }
 
-    logger.info(`Using cookie path: ${cookiePath}`);
-    this.cookieManager = new CookieManager(cookiePath);
+    logger.info(`Using accountId: ${accountId || 'default'}`);
+    this.cookieManager = new CookieManager(cookiePath, accountId);
   }
 
   async getBrowser(): Promise<Browser> {
@@ -57,14 +65,23 @@ export class AuthManager {
     return await this.cookieManager.loadCookies();
   }
 
-  async login(options?: {timeout?: number}): Promise<void> {
-    const timeoutSeconds = options?.timeout || 10
-    logger.info(`Starting login process with timeout: ${timeoutSeconds}s`)
-    const timeoutMs = timeoutSeconds * 1000
+  async login(options?: LoginOptions): Promise<void> {
+    // 如果 options 中有 accountId，更新实例的 accountId
+    if (options?.accountId) {
+      this.accountId = options.accountId;
+      this.cookieManager = new CookieManager(undefined, options.accountId);
+      logger.info(`Switched to account: ${options.accountId}`);
+    }
+
+    const timeoutSeconds = options?.timeout || 10;
+    logger.info(`Starting login process with timeout: ${timeoutSeconds}s${this.accountId ? ` for account: ${this.accountId}` : ''}`);
+    const timeoutMs = timeoutSeconds * 1000;
+
     this.browser = await chromium.launch({
       headless: false,
       timeout: timeoutMs,
-    })
+    });
+
     if (!this.browser) {
       logger.error('Failed to launch browser');
       throw new Error('Failed to launch browser');
@@ -118,7 +135,7 @@ export class AuthManager {
 
         // Wait for QR code image
         logger.info('Waiting for QR code');
-        const qrCodeImage = await this.page.waitForSelector('.qrcode-img', {
+        await this.page.waitForSelector('.qrcode-img', {
           timeout: timeoutMs
         });
 
@@ -171,3 +188,6 @@ export class AuthManager {
     this.browser = null;
   }
 }
+
+// 导出便捷方法
+export { accountManager, AccountManager } from './accountManager';

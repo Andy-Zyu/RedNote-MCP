@@ -12,10 +12,10 @@ import {
 } from './types'
 
 export class NoteManageTools extends BaseTools {
-  async getMyNotes(): Promise<MyNotesResult> {
+  async getMyNotes(accountId?: string): Promise<MyNotesResult> {
     logger.info('Getting my notes from creator center')
     const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage()
+    const lease = await bm.acquirePage(accountId)
     let creatorPage: Page | null = null
     try {
       // SSO into creator center — land on publish page first
@@ -54,7 +54,7 @@ export class NoteManageTools extends BaseTools {
     }
   }
 
-  async editNote(options: EditNoteOptions): Promise<EditNoteResult> {
+  async editNote(options: EditNoteOptions & { accountId?: string }): Promise<EditNoteResult> {
     logger.info(`Editing note: ${options.noteId}`)
     return this.withCreatorPage(
       'https://creator.xiaohongshu.com/new/note-manager',
@@ -127,11 +127,12 @@ export class NoteManageTools extends BaseTools {
 
         logger.info('Note edited successfully')
         return { success: true, message: '笔记编辑成功' }
-      }
+      },
+      options.accountId
     )
   }
 
-  async deleteNote(noteId: string): Promise<DeleteNoteResult> {
+  async deleteNote(noteId: string, accountId?: string): Promise<DeleteNoteResult> {
     logger.info(`Deleting note: ${noteId}`)
     return this.withCreatorPage(
       'https://creator.xiaohongshu.com/new/note-manager',
@@ -162,7 +163,8 @@ export class NoteManageTools extends BaseTools {
 
         logger.info(`Note ${noteId} deleted successfully`)
         return { success: true, message: `笔记 ${noteId} 已删除` }
-      }
+      },
+      accountId
     )
   }
 

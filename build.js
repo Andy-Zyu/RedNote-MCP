@@ -1,4 +1,26 @@
 const esbuild = require('esbuild');
+const fs = require('fs');
+const path = require('path');
+
+// Copy web directory to dist
+function copyWebFiles() {
+  const srcWeb = path.join(__dirname, 'src/web');
+  const distWeb = path.join(__dirname, 'dist/web');
+
+  // Create dist/web directory
+  if (!fs.existsSync(distWeb)) {
+    fs.mkdirSync(distWeb, { recursive: true });
+  }
+
+  // Copy all files from src/web to dist/web
+  const files = fs.readdirSync(srcWeb);
+  files.forEach(file => {
+    const srcFile = path.join(srcWeb, file);
+    const distFile = path.join(distWeb, file);
+    fs.copyFileSync(srcFile, distFile);
+    console.log(`✅ Copied ${file} to dist/web/`);
+  });
+}
 
 // MCP Server build (existing)
 esbuild.build({
@@ -20,6 +42,8 @@ esbuild.build({
   legalComments: 'none',
 }).then(() => {
   console.log('✅ Bundle + minify done → dist/cli.js');
+  // Copy web files after build
+  copyWebFiles();
 }).catch((e) => {
   console.error(e);
   process.exit(1);

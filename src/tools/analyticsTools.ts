@@ -16,7 +16,7 @@ import {
 } from './types'
 
 export class AnalyticsTools extends BaseTools {
-  async discoverTrending(keywords: string[]): Promise<DiscoverTrendingResult> {
+  async discoverTrending(keywords: string[], accountId?: string): Promise<DiscoverTrendingResult> {
     logger.info(`Discovering trending topics for ${keywords.length} keywords`)
     const tools = new RedNoteTools()
 
@@ -24,7 +24,7 @@ export class AnalyticsTools extends BaseTools {
 
     for (const keyword of keywords) {
       try {
-        const notes = await tools.searchNotes(keyword, 10)
+        const notes = await tools.searchNotes(keyword, 10, accountId)
         if (notes.length === 0) continue
 
         const totalLikes = notes.reduce((sum, n) => sum + (n.likes ?? 0), 0)
@@ -61,10 +61,10 @@ export class AnalyticsTools extends BaseTools {
     }
   }
 
-  async analyzeBestPublishTime(): Promise<BestPublishTimeResult> {
+  async analyzeBestPublishTime(accountId?: string): Promise<BestPublishTimeResult> {
     logger.info('Analyzing best publish time')
     const tools = new RedNoteTools()
-    const analytics = await tools.getContentAnalytics()
+    const analytics = await tools.getContentAnalytics({ accountId })
 
     const timeSlots = new Map<string, {
       impressions: number[]
@@ -138,7 +138,7 @@ export class AnalyticsTools extends BaseTools {
     }
   }
 
-  async generateContentReport(period: string = '7days'): Promise<ContentReport> {
+  async generateContentReport(period: string = '7days', accountId?: string): Promise<ContentReport> {
     logger.info(`Generating content report for period: ${period}`)
     const tools = new RedNoteTools()
 
@@ -146,9 +146,9 @@ export class AnalyticsTools extends BaseTools {
     // which opens a new creator tab. Concurrent SSO flows on the same
     // BrowserContext cause net::ERR_ABORTED because the main page gets
     // navigated away while another lease is still using it.
-    const dashboard = await tools.getDashboardOverview(period)
-    const contentAnalytics = await tools.getContentAnalytics()
-    const fansAnalytics = await tools.getFansAnalytics(period)
+    const dashboard = await tools.getDashboardOverview(period, accountId)
+    const contentAnalytics = await tools.getContentAnalytics({ accountId })
+    const fansAnalytics = await tools.getFansAnalytics(period, accountId)
 
     // Aggregate content metrics
     const notes = contentAnalytics.notes
@@ -221,7 +221,7 @@ export class AnalyticsTools extends BaseTools {
     }
   }
 
-  async getInspirationTopics(category?: string): Promise<InspirationResult> {
+  async getInspirationTopics(category?: string, accountId?: string): Promise<InspirationResult> {
     const targetCategory = category || '美食'
     logger.info(`Getting inspiration topics for category: ${targetCategory}`)
 
@@ -254,11 +254,12 @@ export class AnalyticsTools extends BaseTools {
           category: targetCategory,
           topics,
         }
-      }
+      },
+      accountId
     )
   }
 
-  async getActivityCenter(): Promise<ActivityCenterResult> {
+  async getActivityCenter(accountId?: string): Promise<ActivityCenterResult> {
     logger.info('Fetching activity center data')
 
     return this.withCreatorPage(
@@ -320,7 +321,8 @@ export class AnalyticsTools extends BaseTools {
           totalCount: activities.length,
           focusedCount: focusTotal,
         }
-      }
+      },
+      accountId
     )
   }
 

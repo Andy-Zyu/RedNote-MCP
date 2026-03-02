@@ -29,10 +29,11 @@ export class CommentTools extends BaseTools {
   async commentNote(options: {
     noteUrl: string
     content: string
+    accountId?: string
   }): Promise<CommentResult> {
     logger.info(`Commenting on note: ${options.noteUrl}`)
     const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage()
+    const lease = await bm.acquirePage(options.accountId)
     try {
       const page = lease.page
       this.page = page
@@ -93,10 +94,11 @@ export class CommentTools extends BaseTools {
     commentAuthor: string
     commentContent: string
     replyText: string
+    accountId?: string
   }): Promise<ReplyCommentResult> {
     logger.info(`Replying to comment by ${options.commentAuthor} on ${options.noteUrl}`)
     const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage()
+    const lease = await bm.acquirePage(options.accountId)
     try {
       const page = lease.page
       this.page = page
@@ -200,12 +202,12 @@ export class CommentTools extends BaseTools {
     }
   }
 
-  async filterComments(noteUrl: string): Promise<FilterCommentsResult> {
+  async filterComments(noteUrl: string, accountId?: string): Promise<FilterCommentsResult> {
     logger.info(`Filtering comments for: ${noteUrl}`)
 
     // Reuse existing getNoteComments
     const tools = new RedNoteTools()
-    const comments = await tools.getNoteComments(noteUrl)
+    const comments = await tools.getNoteComments(noteUrl, accountId)
 
     const categories: Record<SentimentCategory, CategorizedComment[]> = {
       positive: [],

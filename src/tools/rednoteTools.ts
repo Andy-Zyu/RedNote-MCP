@@ -40,10 +40,10 @@ export class RedNoteTools extends BaseTools {
     logger.info('Initializing RedNoteTools')
   }
 
-  async searchNotes(keywords: string, limit: number = 10): Promise<Note[]> {
+  async searchNotes(keywords: string, limit: number = 10, accountId?: string): Promise<Note[]> {
     logger.info(`Searching notes with keywords: ${keywords}, limit: ${limit}`)
     const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage()
+    const lease = await bm.acquirePage(accountId)
     try {
       const interceptor = new SearchInterceptor(lease.page, keywords, limit)
       const result = await interceptor.intercept(async () => {
@@ -69,10 +69,10 @@ export class RedNoteTools extends BaseTools {
     }
   }
 
-  async getNoteContent(url: string): Promise<NoteDetail> {
+  async getNoteContent(url: string, accountId?: string): Promise<NoteDetail> {
     logger.info(`Getting note content for URL: ${url}`)
     const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage()
+    const lease = await bm.acquirePage(accountId)
     try {
       const actualURL = this.extractRedBookUrl(url)
       const interceptor = new NoteDetailInterceptor(lease.page, actualURL)
@@ -95,10 +95,10 @@ export class RedNoteTools extends BaseTools {
     }
   }
 
-  async getNoteComments(url: string): Promise<Comment[]> {
+  async getNoteComments(url: string, accountId?: string): Promise<Comment[]> {
     logger.info(`Getting comments for URL: ${url}`)
     const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage()
+    const lease = await bm.acquirePage(accountId)
     try {
       const interceptor = new NoteCommentsInterceptor(lease.page)
       const result = await interceptor.intercept(async () => {
@@ -127,6 +127,7 @@ export class RedNoteTools extends BaseTools {
     images?: string[]
     tags?: string[]
     keepAlive?: boolean
+    accountId?: string
   }): Promise<{ success: boolean; message: string; url?: string }> {
     return this.withCreatorPage(
       'https://creator.xiaohongshu.com/publish/publish?source=official',
@@ -151,7 +152,8 @@ export class RedNoteTools extends BaseTools {
         // Fill title, content, tags and publish
         await this.fillPublishForm(creatorPage, options)
         return await this.submitPublish(creatorPage)
-      }
+      },
+      options.accountId
     )
   }
 
@@ -161,6 +163,7 @@ export class RedNoteTools extends BaseTools {
     video: string
     tags?: string[]
     keepAlive?: boolean
+    accountId?: string
   }): Promise<{ success: boolean; message: string; url?: string }> {
     return this.withCreatorPage(
       'https://creator.xiaohongshu.com/publish/publish?source=official',
@@ -184,7 +187,8 @@ export class RedNoteTools extends BaseTools {
         // Fill title, content, tags and publish
         await this.fillPublishForm(creatorPage, options)
         return await this.submitPublish(creatorPage)
-      }
+      },
+      options.accountId
     )
   }
 
@@ -193,6 +197,7 @@ export class RedNoteTools extends BaseTools {
     content: string
     tags?: string[]
     keepAlive?: boolean
+    accountId?: string
   }): Promise<{ success: boolean; message: string; url?: string }> {
     return this.withCreatorPage(
       'https://creator.xiaohongshu.com/publish/publish?source=official',
@@ -266,7 +271,8 @@ export class RedNoteTools extends BaseTools {
 
         // Step 7: Publish
         return await this.submitPublish(creatorPage)
-      }
+      },
+      options.accountId
     )
   }
 
@@ -275,6 +281,7 @@ export class RedNoteTools extends BaseTools {
     content: string
     tags?: string[]
     keepAlive?: boolean
+    accountId?: string
   }): Promise<{ success: boolean; message: string; url?: string }> {
     return this.withCreatorPage(
       'https://creator.xiaohongshu.com/publish/publish?source=official',
@@ -387,7 +394,8 @@ export class RedNoteTools extends BaseTools {
           success: true,
           message: '长文笔记已提交发布，请在小红书创作者中心确认状态'
         }
-      }
+      },
+      options.accountId
     )
   }
 
@@ -498,10 +506,10 @@ export class RedNoteTools extends BaseTools {
     }
   }
 
-  async getDashboardOverview(period: string = '7days'): Promise<DashboardOverview> {
+  async getDashboardOverview(period: string = '7days', accountId?: string): Promise<DashboardOverview> {
     logger.info(`Getting dashboard overview for period: ${period}`)
     const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage()
+    const lease = await bm.acquirePage(accountId)
     let activePage: Page | null = null
     try {
       const targetUrl = 'https://creator.xiaohongshu.com/statistics/account/v2'
@@ -525,10 +533,11 @@ export class RedNoteTools extends BaseTools {
   async getContentAnalytics(options?: {
     startDate?: string
     endDate?: string
+    accountId?: string
   }): Promise<ContentAnalytics> {
     logger.info('Getting content analytics')
     const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage()
+    const lease = await bm.acquirePage(options?.accountId)
     let activePage: Page | null = null
     try {
       const targetUrl = 'https://creator.xiaohongshu.com/statistics/data-analysis'
@@ -549,10 +558,10 @@ export class RedNoteTools extends BaseTools {
     }
   }
 
-  async getFansAnalytics(period: string = '7days'): Promise<FansAnalytics> {
+  async getFansAnalytics(period: string = '7days', accountId?: string): Promise<FansAnalytics> {
     logger.info(`Getting fans analytics for period: ${period}`)
     const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage()
+    const lease = await bm.acquirePage(accountId)
     let activePage: Page | null = null
     try {
       const targetUrl = 'https://creator.xiaohongshu.com/statistics/fans-data'

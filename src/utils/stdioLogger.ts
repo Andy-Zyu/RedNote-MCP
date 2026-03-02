@@ -41,10 +41,40 @@ export function createStdioLogger(logFilePath: string): () => void {
     logger.info(`[STDIN] ${data}`)
   })
 
+  // Add error handlers for stdio streams
+  process.stdin.on('error', (error) => {
+    logger.error('[STDIN] Stream error:', error)
+    // Don't exit - keep server running
+  })
+
+  process.stdout.on('error', (error) => {
+    logger.error('[STDOUT] Stream error:', error)
+    // Don't exit - keep server running
+  })
+
+  process.stderr.on('error', (error) => {
+    logger.error('[STDERR] Stream error:', error)
+    // Don't exit - keep server running
+  })
+
+  // Handle pipe errors (EPIPE)
+  process.stdin.on('end', () => {
+    logger.warn('[STDIN] Stream ended')
+  })
+
+  process.stdin.on('close', () => {
+    logger.warn('[STDIN] Stream closed')
+  })
+
   // Return cleanup function
   return () => {
     process.stdout.write = originalStdoutWrite
     process.stderr.write = originalStderrWrite
     process.stdin.removeAllListeners('data')
+    process.stdin.removeAllListeners('error')
+    process.stdin.removeAllListeners('end')
+    process.stdin.removeAllListeners('close')
+    process.stdout.removeAllListeners('error')
+    process.stderr.removeAllListeners('error')
   }
 }
