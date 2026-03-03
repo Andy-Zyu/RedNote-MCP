@@ -345,8 +345,11 @@ function App() {
 
   const handleRelogin = async (account) => {
     try {
-      const response = await api.relogin(account.id);
-      const data = await response.json();
+      const data = await api.relogin(account.id);
+      if (data.error) {
+        alert('重新登录失败：' + data.error);
+        return;
+      }
       alert(`已清除账号 "${account.name}" 的登录信息，请在浏览器中完成扫码登录`);
       await loadAccounts();
     } catch (err) {
