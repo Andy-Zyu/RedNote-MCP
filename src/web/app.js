@@ -19,7 +19,8 @@ const api = {
   }).then(r => r.json()),
   setDefault: (id) => fetch(`${API_BASE}/accounts/${id}/default`, { method: 'POST' }).then(r => r.json()),
   startScan: (id) => fetch(`${API_BASE}/scan/${id}`, { method: 'POST' }).then(r => r.json()),
-  abortScan: (id) => fetch(`${API_BASE}/scan/${id}/abort`, { method: 'POST' }).then(r => r.json())
+  abortScan: (id) => fetch(`${API_BASE}/scan/${id}/abort`, { method: 'POST' }).then(r => r.json()),
+  relogin: (id) => fetch(`${API_BASE}/accounts/${id}/relogin`, { method: 'POST' }).then(r => r.json())
 };
 
 // WebSocket Hook
@@ -171,7 +172,7 @@ function ScanModal({ accountId, accountName, onClose }) {
 }
 
 // 账号卡片组件
-function AccountCard({ account, onRename, onDelete, onSetDefault, onScan }) {
+function AccountCard({ account, onRename, onDelete, onSetDefault, onScan, onRelogin }) {
   const [isEditing, setIsEditing] = useState(false);
   const [newName, setNewName] = useState(account.name);
 
@@ -227,6 +228,14 @@ function AccountCard({ account, onRename, onDelete, onSetDefault, onScan }) {
             className="px-4 py-2 bg-pink border-[3px] border-dark text-dark text-sm rounded-lg font-black hover:shadow-brutal-sm hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all"
           >
             扫码登录
+          </button>
+        )}
+        {account.hasCookies && (
+          <button
+            onClick={() => onRelogin(account)}
+            className="px-4 py-2 bg-sky border-[3px] border-dark text-dark text-sm rounded-lg font-black hover:shadow-brutal-sm hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all"
+          >
+            重新登录
           </button>
         )}
         <button
@@ -334,6 +343,18 @@ function App() {
     setScanningAccount(account);
   };
 
+  const handleRelogin = async (account) => {
+    try {
+      const response = await api.relogin(account.id);
+      const data = await response.json();
+      alert(`已清除账号 "${account.name}" 的登录信息，请在浏览器中完成扫码登录`);
+      await loadAccounts();
+    } catch (err) {
+      alert('重新登录失败：' + (err.message || '未知错误'));
+      console.error(err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg">
@@ -406,6 +427,7 @@ function App() {
                 onDelete={handleDelete}
                 onSetDefault={handleSetDefault}
                 onScan={handleScan}
+                onRelogin={handleRelogin}
               />
             ))}
           </div>

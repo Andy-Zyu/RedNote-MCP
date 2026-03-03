@@ -965,6 +965,79 @@ ${isDefault ? '(默认账号)' : ''}
         }
       }
     )
+
+    server.tool(
+      'relogin',
+      '重新登录指定账号（清除 Cookie 并触发扫码流程）',
+      {
+        accountId: z.string().describe('要重新登录的账号 ID')
+      },
+      async (args: any) => {
+        const { accountId } = args
+        await getGuard().verify('relogin')
+        const { accountManager } = await import('./auth/accountManager')
+
+        try {
+          // 验证账号是否存在
+          const account = accountManager.getAccount(accountId)
+          if (!account) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `账号不存在: ${accountId}`
+                }
+              ]
+            }
+          }
+
+          logger.info(`Relogin requested for account: ${accountId} (${account.name})`)
+
+          // 清除该账号的 Cookie
+          await accountManager.clearCookies(accountId)
+          logger.info(`Cleared cookies for account: ${accountId}`)
+
+          // 检查 Matrix 服务器是否运行
+          const { isMatrixServerRunning } = await import('./matrix/server')
+          if (!isMatrixServerRunning()) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: 'Matrix 服务器未启动，无法触发扫码流程。请先启动 Matrix 服务器。'
+                }
+              ]
+            }
+          }
+
+          // 触发扫码流程
+          const { startScan } = await import('./matrix/scanner')
+
+          // 异步启动扫码流程（不阻塞响应）
+          startScan(accountId).catch(err => {
+            logger.error(`Scan failed for account ${accountId}:`, err)
+          })
+
+          // 打开 Web 界面
+          const { exec } = require('child_process')
+          const open = process.platform === 'darwin' ? 'open' :
+                       process.platform === 'win32' ? 'start' : 'xdg-open'
+          exec(`${open} http://localhost:3001`)
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `已清除账号 "${account.name}" (${accountId}) 的登录信息。\n\n扫码流程已启动，请在浏览器中完成扫码登录：http://localhost:3001`
+              }
+            ]
+          }
+        } catch (error) {
+          logger.error('Error during relogin:', error)
+          throw error
+        }
+      }
+    )
   }
 }
 

@@ -44,6 +44,16 @@ export const activeScans = new Map<string, AbortController>();
 // Account health monitor instance
 let healthMonitor: AccountHealthMonitor | null = null;
 
+// Track server instance
+let serverInstance: http.Server | null = null;
+
+/**
+ * Check if Matrix server is running
+ */
+export function isMatrixServerRunning(): boolean {
+  return serverInstance !== null && serverInstance.listening;
+}
+
 export async function startMatrixServer(port: number = 3001): Promise<http.Server> {
   const app = express();
 
@@ -165,6 +175,34 @@ export async function startMatrixServer(port: number = 3001): Promise<http.Serve
     }
   });
 
+  // Relogin API - Clear cookies and trigger scan
+  app.post('/api/accounts/:id/relogin', authMiddleware, async (req, res) => {
+    const id = extractParam(req.params.id);
+    logger.info(`[Matrix API] POST /api/accounts/${id}/relogin - authorized`);
+    const account = accountManager.getAccount(id);
+    if (!account) {
+      res.status(404).json({ error: 'Account not found' });
+      return;
+    }
+
+    try {
+      // Clear cookies for this account
+      accountManager.clearCookies(id);
+      logger.info(`[Matrix API] Cleared cookies for account ${id}`);
+
+      // Start scan in background
+      startScan(id).catch(err => {
+        logger.error(`[Matrix API] Scan error for ${id}:`, err);
+      });
+
+      res.json({ ok: true, scanId: id, status: 'scanning' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('[Matrix API] Relogin error:', error);
+      res.status(500).json({ error: message });
+    }
+  });
+
   // Scan API - Protected by auth middleware
   app.post('/api/scan/:accountId', authMiddleware, async (req, res) => {
     const accountId = extractParam(req.params.accountId);
@@ -246,6 +284,9 @@ export async function startMatrixServer(port: number = 3001): Promise<http.Serve
       logger.info(`Matrix server running on http://localhost:${port}`);
       logger.info(`WebSocket on ws://localhost:${port}/ws`);
 
+      // Store server instance
+      serverInstance = server;
+
       // 启动账号健康监测
       healthMonitor = new AccountHealthMonitor();
 
@@ -290,6 +331,8 @@ export function stopMatrixServer(server: http.Server): Promise<void> {
       if (err) {
         reject(err);
       } else {
+        // Clear server instance
+        serverInstance = null;
         logger.info('Matrix server stopped');
         resolve();
       }
