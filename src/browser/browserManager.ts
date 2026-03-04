@@ -6,10 +6,7 @@ import * as os from 'os'
 import * as fs from 'fs'
 import logger from '../utils/logger'
 import { SESSION_CHECK_CACHE_TTL } from '../constants/timeouts'
-import { SELECTORS } from '../selectors'
 
-const COOKIE_PATH = path.join(os.homedir(), '.mcp', 'rednote', 'cookies.json')
-const PROFILE_DIR = path.join(os.homedir(), '.mcp', 'rednote', 'browser-profile')
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000 // 30 minutes (heartbeat handles keep-alive)
 
 // Cache for session validity checks: accountId -> last check timestamp
@@ -24,9 +21,11 @@ export interface PageLease {
 const browserManagers = new Map<string, BrowserManager>()
 
 export class BrowserManager {
+  private isBrowserOwner = false // true if this process launched the browser server
   private static instance: BrowserManager | null = null
   private browser: Browser | null = null
   private context: BrowserContext | null = null
+  private ownerContext: BrowserContext | null = null // Original persistent context, only owner has it
   private readonly cookieManager: CookieManager
   private idleTimer: NodeJS.Timeout | null = null
   private activeLeases: Map<string, Page> = new Map()
@@ -35,12 +34,9 @@ export class BrowserManager {
 
   private constructor(accountId?: string) {
     this.accountId = accountId
-    // Use account-specific cookie path if accountId is provided
-    const cookiePath = accountId
-      ? path.join(os.homedir(), '.mcp', 'rednote', 'accounts', accountId, 'cookies.json')
-      : COOKIE_PATH
-    this.cookieManager = new CookieManager(cookiePath, accountId)
-    logger.info(`BrowserManager initialized for account: ${accountId || 'default'}`)
+    const cookiePath = accountManager.getCookiePath(accountId)
+    this.cookieManager = new (CookieManager as any)(cookiePath, accountId)
+    logger.info(`BrowserManager initialized for account: ${accountId || 'default'}, cookies: ${cookiePath}`)
   }
 
   static getInstance(accountId?: string): BrowserManager {
@@ -111,7 +107,10 @@ export class BrowserManager {
     const accountLabel = this.accountId || 'default'
     logger.info(`BrowserManager shutting down for account: ${accountLabel}`)
 
-    await this.refreshCookies()
+    // Only owner should refresh cookies to disk (avoid concurrent writes)
+    if (this.isBrowserOwner) {
+      await this.refreshCookies()
+    }
 
     // Close all active lease pages
     for (const [id, page] of this.activeLeases) {
@@ -125,15 +124,69 @@ export class BrowserManager {
     }
     this.activeLeases.clear()
 
-    // For persistent context, closing context also closes the browser
-    if (this.context) {
-      try {
-        await this.context.close()
-      } catch (err) {
-        logger.error('Error closing context:', err)
+    if (this.isBrowserOwner) {
+      // === Owner shutdown: Close in correct order ===
+      // Step 1: Disconnect CDP (doesn't kill Chromium)
+      if (this.browser) {
+        try {
+          await this.browser.close()
+          logger.info(`Disconnected CDP connection for account: ${accountLabel}`)
+        } catch (err) {
+          logger.error('Error disconnecting CDP:', err)
+        }
       }
-      this.context = null
-      this.browser = null
+      // Step 2: Close ownerContext (this actually kills Chromium)
+      if (this.ownerContext) {
+        try {
+          await this.ownerContext.close()
+          logger.info(`Closed ownerContext (Chromium stopped) for account: ${accountLabel}`)
+        } catch (err) {
+          logger.error('Error closing ownerContext:', err)
+        }
+      }
+    } else {
+      // === Non-owner: Just disconnect CDP, don't affect owner ===
+      if (this.browser) {
+        try {
+          await this.browser.close()
+          logger.info(`Disconnected from shared browser for account: ${accountLabel}`)
+        } catch (err) {
+          logger.error('Error disconnecting from browser:', err)
+        }
+      }
+    }
+
+    // Clear all references
+    this.context = null
+    this.browser = null
+    this.ownerContext = null
+
+    // Clean up lockfile (only owner)
+    if (this.isBrowserOwner) {
+      const lockFile = path.join(
+        os.homedir(),
+        '.mcp',
+        'rednote',
+        'profiles',
+        this.accountId || 'default',
+        'browser.wsEndpoint'
+      )
+      if (fs.existsSync(lockFile)) {
+        try {
+          fs.unlinkSync(lockFile)
+          logger.info(`Removed lockfile ${lockFile}`)
+        } catch (e) {
+          logger.error(`Failed to remove lockfile:`, e)
+        }
+      }
+      this.isBrowserOwner = false // Reset owner state
+    }
+
+    // Remove from Map to avoid zombie instances
+    if (this.accountId) {
+      browserManagers.delete(this.accountId)
+    } else {
+      BrowserManager.instance = null
     }
 
     logger.info(`BrowserManager shutdown complete for account: ${accountLabel}`)
@@ -161,77 +214,192 @@ export class BrowserManager {
 
   private async launchBrowser(): Promise<void> {
     const accountLabel = this.accountId || 'default'
-    logger.info(`Launching browser with persistent profile for account: ${accountLabel}`)
+    const profileDir = path.join(os.homedir(), '.mcp', 'rednote', 'profiles', accountLabel)
 
-    // Always use account-specific profile directory (including default account)
-    const profileDir = path.join(
-      os.homedir(),
-      '.mcp',
-      'rednote',
-      'profiles',
-      this.accountId || 'default'
-    )
-
-    // Ensure profile directory exists
     if (!fs.existsSync(profileDir)) {
       fs.mkdirSync(profileDir, { recursive: true })
       logger.info(`Created profile directory: ${profileDir}`)
     }
-
-    // Set directory permissions to user-only access (rwx------)
     fs.chmodSync(profileDir, 0o700)
 
-    // launchPersistentContext returns a BrowserContext directly (no separate Browser)
-    this.context = await chromium.launchPersistentContext(profileDir, {
-      headless: true,
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--disable-shared-workers',
-        '--disable-background-networking',
-      ],
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-    })
+    const lockFile = path.join(profileDir, 'browser.wsEndpoint')
+    const launchLockFile = path.join(profileDir, 'browser.launch.lock')
 
-    // Get the underlying browser reference
-    this.browser = this.context.browser()
+    // === Step 1: Try to connect to existing shared browser server ===
+    if (fs.existsSync(lockFile)) {
+      try {
+        const wsEndpoint = fs.readFileSync(lockFile, 'utf-8').trim()
+        logger.info(`Attempting to connect to shared browser at ${wsEndpoint} for account: ${accountLabel}`)
+        this.browser = await chromium.connectOverCDP({
+          endpointURL: wsEndpoint,
+          timeout: 10000,
+        })
+        this.context = this.browser.contexts()[0]
+        if (!this.context) throw new Error('No context found on connected browser')
 
-    // Hide webdriver property to avoid bot detection
-    await this.context.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
-    })
+        this.isBrowserOwner = false
+        logger.info(`Successfully connected to shared browser server for account: ${accountLabel}`)
+        await this.validateSession(accountLabel)
+        this.setupBrowserEvents(accountLabel)
+        return
+      } catch (err) {
+        logger.warn(`Failed to connect to shared browser, removing stale lockfile for account: ${accountLabel}`, err)
+        try { fs.unlinkSync(lockFile) } catch (e) { }
+      }
+    }
 
+    // === Step 2: Launch a new shared browser server (we are the owner) ===
+    // Use atomic file creation to prevent race condition: only one process should launch
+    let launchLockFd: number | null = null
+    try {
+      launchLockFd = fs.openSync(launchLockFile, 'wx') // 'wx' = create exclusive, fails if exists
+      logger.info(`Acquired launch lock for account: ${accountLabel}`)
+    } catch (err) {
+      // Another process is launching, wait for it to finish and re-check
+      logger.info(`Launch lock held by another process, waiting for account: ${accountLabel}`)
+      for (let i = 0; i < 50; i++) { // Wait up to 5 seconds
+        await new Promise(r => setTimeout(r, 100))
+        if (!fs.existsSync(launchLockFile)) {
+          // Lock released, try connecting to the newly launched browser
+          if (fs.existsSync(lockFile)) {
+            const wsEndpoint = fs.readFileSync(lockFile, 'utf-8').trim()
+            this.browser = await chromium.connectOverCDP({ endpointURL: wsEndpoint, timeout: 10000 })
+            this.context = this.browser.contexts()[0]
+            if (this.context) {
+              this.isBrowserOwner = false
+              this.setupBrowserEvents(accountLabel)
+              return
+            }
+          }
+        }
+      }
+      throw new Error(`Timeout waiting for launch lock for account: ${accountLabel}`)
+    }
+
+    try {
+      logger.info(`Launching new browser server for account: ${accountLabel}`)
+
+      // Cleanup stale Chromium locks
+      const singletonLock = path.join(profileDir, 'SingletonLock')
+      const devToolsPortFile = path.join(profileDir, 'DevToolsActivePort')
+      try { if (fs.existsSync(singletonLock)) fs.unlinkSync(singletonLock) } catch (e) { }
+      try { if (fs.existsSync(devToolsPortFile)) fs.unlinkSync(devToolsPortFile) } catch (e) { }
+
+      const context = await chromium.launchPersistentContext(profileDir, {
+        headless: false, // Force headed mode for maximum compatibility on Mac
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        viewport: { width: 1280, height: 800 },
+        args: [
+          '--remote-debugging-port=0',
+          '--remote-allow-origins=*',
+          '--disable-blink-features=AutomationControlled',
+          '--disable-shared-workers',
+          '--disable-background-networking',
+        ],
+        ignoreDefaultArgs: ['--enable-automation']
+      })
+
+      // Poll for the CDP port assigned by the browser
+      let portStr = ''
+      for (let i = 0; i < 50; i++) {
+        await new Promise(r => setTimeout(r, 100))
+        if (fs.existsSync(devToolsPortFile)) {
+          const content = fs.readFileSync(devToolsPortFile, 'utf-8').split('\n')
+          if (content.length >= 2) {
+            portStr = content[0].trim()
+            break
+          }
+        }
+      }
+
+      if (!portStr) {
+        await context.close().catch(() => { })
+        throw new Error(`Timeout waiting for DevToolsActivePort file at ${devToolsPortFile}`)
+      }
+
+      const wsEndpoint = `http://127.0.0.1:${portStr}`
+      fs.writeFileSync(lockFile, wsEndpoint, 'utf-8')
+      logger.info(`Browser server registered at: ${wsEndpoint}`)
+
+      this.isBrowserOwner = true
+      this.ownerContext = context // Store the original persistent context
+
+      // Connect to itself over CDP to get a standardized Browser object
+      try {
+        this.browser = await chromium.connectOverCDP({
+          endpointURL: wsEndpoint,
+          timeout: 15000,
+        })
+      } catch (err) {
+        // CDP connection failed, must shut down the already-started Chromium to avoid leak
+        logger.error('Failed to connect to own browser via CDP, shutting down ownerContext', err)
+        await context.close().catch(() => { })
+        try { fs.unlinkSync(lockFile) } catch (e) { }
+        this.isBrowserOwner = false
+        this.ownerContext = null
+        throw err
+      }
+      this.context = this.browser.contexts()[0]
+
+      await this.context.addInitScript(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
+      })
+
+      // Ensure cookies are loaded from the canonical disk storage (~/.mcp/rednote/cookies.json)
+      const cookies = await this.cookieManager.loadCookies()
+      if (cookies.length > 0) {
+        logger.info(`Injecting ${cookies.length} valid cookies into account context: ${accountLabel}`)
+        await this.context.addCookies(cookies)
+      }
+
+      await this.validateSession(accountLabel)
+      this.setupBrowserEvents(accountLabel)
+    } finally {
+      // Always release the launch lock
+      if (launchLockFd !== null) {
+        try { fs.closeSync(launchLockFd) } catch (e) { }
+        try { fs.unlinkSync(launchLockFile) } catch (e) { }
+        logger.info(`Released launch lock for account: ${accountLabel}`)
+      }
+    }
+  }
+
+  private setupBrowserEvents(accountLabel: string): void {
     if (this.browser) {
       this.browser.on('disconnected', () => {
         logger.warn(`Browser disconnected unexpectedly for account: ${accountLabel}, clearing state`)
         this.browser = null
         this.context = null
+        this.ownerContext = null // Also clear ownerContext
         this.activeLeases.clear()
         this.clearIdleTimer()
+
+        // Clean up lockfile if owner
+        if (this.isBrowserOwner) {
+          const lockFile = path.join(
+            os.homedir(),
+            '.mcp',
+            'rednote',
+            'profiles',
+            this.accountId || 'default',
+            'browser.wsEndpoint'
+          )
+          try { if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile) } catch (e) { }
+          this.isBrowserOwner = false
+        }
       })
     }
 
-    // Add error handler for context
-    this.context.on('page', (page) => {
-      page.on('crash', () => {
-        logger.error(`Page crashed for account: ${accountLabel}`)
+    if (this.context) {
+      this.context.on('page', (page) => {
+        page.on('crash', () => {
+          logger.error(`Page crashed for account: ${accountLabel}`)
+        })
+        page.on('pageerror', (error) => {
+          logger.error(`Page error for account: ${accountLabel}:`, error.message)
+        })
       })
-      page.on('pageerror', (error) => {
-        logger.error(`Page error for account: ${accountLabel}:`, error.message)
-      })
-    })
-
-    // Load cookies from file into persistent context (first time migration)
-    const cookies = await this.cookieManager.loadCookies()
-    if (cookies.length === 0) {
-      throw new Error(
-        `未检测到账号 ${accountLabel} 的登录信息，请先调用 login 工具扫码登录小红书账号。`
-      )
     }
-    logger.info(`Loading ${cookies.length} cookies into context for account: ${accountLabel}`)
-    await this.context.addCookies(cookies)
-
-    // Session validity pre-check (cached, skip if checked recently)
-    await this.validateSession(accountLabel)
   }
 
   /**
@@ -252,21 +420,29 @@ export class BrowserManager {
     const page = await this.context!.newPage()
 
     try {
+      logger.info(`Navigating to explore for session validation...`)
       await page.goto('https://www.xiaohongshu.com/explore', {
-        waitUntil: 'domcontentloaded',
+        waitUntil: 'domcontentloaded', // Faster than 'networkidle'
         timeout: 30000,
       })
-      await page.waitForTimeout(3000)
+      await page.waitForTimeout(2000)
 
-      const isLoggedIn = await page.evaluate((sidebarSel: string) => {
-        const sidebar = document.querySelector(sidebarSel)
-        return sidebar?.textContent?.trim() === '我'
-      }, SELECTORS.auth.sidebarUser)
+      const currentUrl = page.url()
+      const isLoggedIn = await page.evaluate(() => {
+        // Look for the user indicator in the sidebar or avatar
+        const hasUser = !!document.querySelector('.side-bar-component .user, .avatar, .user-avatar, img[alt*="用户"]')
+        const isLoginMaskVisible = !!document.querySelector('.login-container, .login-box, .qrcode-img')
+        return hasUser && !isLoginMaskVisible
+      })
 
-      if (isLoggedIn) {
+      if (isLoggedIn && !currentUrl.includes('/login')) {
         sessionCheckCache.set(cacheKey, now)
         logger.info(`Session valid for account: ${accountLabel}`)
       } else {
+        const screenshotPath = path.join(os.homedir(), '.mcp', 'rednote', 'profiles', accountLabel, `session-failed-${Date.now()}.png`)
+        await page.screenshot({ path: screenshotPath, fullPage: true })
+        logger.warn(`Session invalid for ${accountLabel}. Redirected to: ${currentUrl}. Screenshot: ${screenshotPath}`)
+
         sessionCheckCache.delete(cacheKey)
         throw new Error(
           `账号 ${accountLabel} 的登录 Session 已过期，请先调用 login 工具重新扫码登录。`
@@ -276,8 +452,8 @@ export class BrowserManager {
       if (error instanceof Error && error.message.includes('Session 已过期')) {
         throw error
       }
-      logger.warn(`Session validation failed for ${accountLabel}, proceeding anyway:`, error)
-      // Don't block on network errors — let the actual tool call handle it
+      // Network errors should be thrown to prevent using a potentially broken session
+      throw new Error(`Session validation failed for ${accountLabel}: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       if (!page.isClosed()) {
         await page.close()
