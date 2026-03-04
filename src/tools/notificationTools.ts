@@ -17,8 +17,8 @@ export class NotificationTools extends BaseTools {
     limit: number = 20,
     accountId?: string,
   ): Promise<GetNotificationsResult[]> {
-    const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage(accountId)
+    const bm = BrowserManager.getInstance(accountId)
+    const lease = await bm.acquirePage()
     try {
       const page = lease.page
       this.page = page

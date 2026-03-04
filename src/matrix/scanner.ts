@@ -1,6 +1,7 @@
-import { chromium, Browser, BrowserContext, Page } from 'playwright';
+import { Browser, Page } from 'playwright';
 import { Account, accountManager } from '../auth/accountManager';
 import { broadcast, WsMessage, activeScans } from './server';
+import { BrowserManager } from '../browser/browserManager';
 import logger from '../utils/logger';
 
 const SCAN_TIMEOUT_MS = 120_000;
@@ -9,8 +10,8 @@ const QR_WAIT_MS = 15_000;
 interface ScanContext {
   scanId: string;
   accountId: string;
-  browser: Browser | null;
-  context: BrowserContext | null;
+  browserManager: BrowserManager | null;
+  pageLease: any | null; // PageLease type
   page: Page | null;
   aborted: boolean;
   qrImageBase64: string | null;
@@ -38,8 +39,8 @@ export async function startScan(accountId: string): Promise<void> {
   const ctx: ScanContext = {
     scanId: accountId,
     accountId,
-    browser: null,
-    context: null,
+    browserManager: null,
+    pageLease: null,
     page: null,
     aborted: false,
     qrImageBase64: null,
@@ -49,41 +50,11 @@ export async function startScan(accountId: string): Promise<void> {
   try {
     broadcast({ type: 'status', scanId: accountId, status: 'scanning' });
 
-    // Launch browser
-    logger.info(`[scanner] Launching browser for account: ${accountId}`);
-    ctx.browser = await chromium.launch({
-      headless: false,
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--window-size=1280,800',
-      ],
-    });
-
-    ctx.context = await ctx.browser.newContext({
-      viewport: { width: 1280, height: 800 },
-      locale: 'zh-CN',
-      timezoneId: 'Asia/Shanghai',
-    });
-
-    // Add anti-detection scripts
-    await ctx.context.addInitScript(`
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-      Object.defineProperty(navigator, 'languages', { get: () => ['zh-CN', 'zh', 'en'] });
-      window.chrome = { runtime: {} };
-    `);
-
-    // Load existing cookies if available
-    const existingCookies = await accountManager.getCookies(accountId);
-    if (existingCookies.length > 0) {
-      logger.info(`[scanner] Loading ${existingCookies.length} existing cookies for account: ${accountId}`);
-      await ctx.context.addCookies(existingCookies);
-    }
-
-    ctx.page = await ctx.context.newPage();
+    // Use BrowserManager to launch/get browser for this account
+    logger.info(`[scanner] Acquiring page from BrowserManager for account: ${accountId}`);
+    ctx.browserManager = BrowserManager.getInstance(accountId);
+    ctx.pageLease = await ctx.browserManager.acquirePage(accountId, { skipValidation: true });
+    ctx.page = ctx.pageLease.page;
 
     // Navigate to explore page
     logger.info('[scanner] Navigating to xiaohongshu.com/explore ...');
@@ -260,7 +231,7 @@ async function captureAndBroadcastQrCode(ctx: ScanContext): Promise<void> {
  * Wait for login to complete
  */
 async function waitForLogin(ctx: ScanContext): Promise<boolean> {
-  if (!ctx.page || !ctx.context) return false;
+  if (!ctx.page) return false;
 
   logger.info(`[scanner] Waiting for login (timeout: ${SCAN_TIMEOUT_MS / 1000}s)...`);
 
@@ -278,9 +249,10 @@ async function waitForLogin(ctx: ScanContext): Promise<boolean> {
       // Page might be navigating
     }
 
-    // Method 2: Check cookie
+    // Method 2: Check cookie via page.context()
     try {
-      const cookies = await ctx.context.cookies();
+      const context = ctx.page.context();
+      const cookies = await context.cookies();
       const webSession = cookies.find(c => c.name === 'web_session');
       if (webSession && webSession.value.length > 80) {
         logger.info('[scanner] Login detected via cookie');
@@ -300,29 +272,33 @@ async function waitForLogin(ctx: ScanContext): Promise<boolean> {
  * Save cookies to account
  */
 async function saveCookies(ctx: ScanContext): Promise<void> {
-  if (!ctx.context) return;
+  if (!ctx.page) return;
 
-  const cookies = await ctx.context.cookies();
-  await accountManager.saveCookies(ctx.accountId, cookies);
-  logger.info(`[scanner] Saved ${cookies.length} cookies for account: ${ctx.accountId}`);
+  try {
+    const context = ctx.page.context();
+    const cookies = await context.cookies();
+    await accountManager.saveCookies(ctx.accountId, cookies);
+    logger.info(`[scanner] Saved ${cookies.length} cookies for account: ${ctx.accountId}`);
+  } catch (err) {
+    logger.error('[scanner] Failed to save cookies:', err);
+  }
 }
 
 /**
- * Cleanup browser resources
+ * Cleanup browser resources - only release page lease, don't close browser
  */
 async function cleanup(ctx: ScanContext): Promise<void> {
   try {
-    if (ctx.page && !ctx.page.isClosed()) await ctx.page.close();
-  } catch { }
-  try {
-    if (ctx.context) await ctx.context.close();
-  } catch { }
-  try {
-    if (ctx.browser) await ctx.browser.close();
+    if (ctx.pageLease && typeof ctx.pageLease.release === 'function') {
+      await ctx.pageLease.release();
+      logger.info('[scanner] Page lease released');
+    } else if (ctx.page && !ctx.page.isClosed()) {
+      await ctx.page.close();
+    }
   } catch { }
   ctx.page = null;
-  ctx.context = null;
-  ctx.browser = null;
+  ctx.pageLease = null;
+  ctx.browserManager = null;
 }
 
 /**

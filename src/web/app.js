@@ -175,12 +175,28 @@ function ScanModal({ accountId, accountName, onClose }) {
 function AccountCard({ account, onRename, onDelete, onSetDefault, onScan, onRelogin }) {
   const [isEditing, setIsEditing] = useState(false);
   const [newName, setNewName] = useState(account.name);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const timer = setTimeout(() => setConfirmDelete(false), 3000);
+    return () => clearTimeout(timer);
+  }, [confirmDelete]);
 
   const handleRename = async () => {
     if (newName && newName !== account.name) {
       await onRename(account.id, newName);
     }
     setIsEditing(false);
+  };
+
+  const handleDeleteClick = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    await onDelete(account.id);
+    setConfirmDelete(false);
   };
 
   const statusColor = account.hasCookies ? 'bg-mint/20 text-mint-dark border-mint' : 'bg-text-light/20 text-text-light border-text-light';
@@ -253,10 +269,10 @@ function AccountCard({ account, onRename, onDelete, onSetDefault, onScan, onRelo
           </button>
         )}
         <button
-          onClick={() => onDelete(account.id)}
-          className="px-4 py-2 bg-coral border-[3px] border-dark text-dark text-sm rounded-lg font-black hover:shadow-brutal-sm hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all"
+          onClick={handleDeleteClick}
+          className={`px-4 py-2 border-[3px] border-dark text-dark text-sm rounded-lg font-black hover:shadow-brutal-sm hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all ${confirmDelete ? 'bg-yellow' : 'bg-coral'}`}
         >
-          删除
+          {confirmDelete ? '确认删除' : '删除'}
         </button>
       </div>
     </div>
@@ -271,6 +287,7 @@ function App() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newAccountName, setNewAccountName] = useState('');
   const [scanningAccount, setScanningAccount] = useState(null);
+  const [toasts, setToasts] = useState([]);
 
   useWebSocket((msg) => {
     if (msg.type === 'accounts') {
@@ -281,6 +298,14 @@ function App() {
   useEffect(() => {
     loadAccounts();
   }, []);
+
+  const showToast = (message, type = 'error', duration = 3000) => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(toast => toast.id !== id));
+    }, duration);
+  };
 
   const loadAccounts = async () => {
     try {
@@ -304,7 +329,7 @@ function App() {
       setNewAccountName('');
       setShowAddModal(false);
     } catch (err) {
-      alert('创建账号失败');
+      showToast('创建账号失败');
       console.error(err);
     }
   };
@@ -313,18 +338,16 @@ function App() {
     try {
       await api.updateAccount(id, name);
     } catch (err) {
-      alert('重命名失败');
+      showToast('重命名失败');
       console.error(err);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('确定要删除这个账号吗？')) return;
-
     try {
       await api.deleteAccount(id);
     } catch (err) {
-      alert('删除失败');
+      showToast('删除失败');
       console.error(err);
     }
   };
@@ -334,7 +357,7 @@ function App() {
       await api.setDefault(id);
       await loadAccounts();
     } catch (err) {
-      alert('设置默认账号失败');
+      showToast('设置默认账号失败');
       console.error(err);
     }
   };
@@ -347,13 +370,13 @@ function App() {
     try {
       const data = await api.relogin(account.id);
       if (data.error) {
-        alert('重新登录失败：' + data.error);
+        showToast('重新登录失败：' + data.error);
         return;
       }
-      alert(`已清除账号 "${account.name}" 的登录信息，请在浏览器中完成扫码登录`);
+      showToast(`已清除账号 "${account.name}" 的登录信息，请在浏览器中完成扫码登录`, 'success', 5000);
       await loadAccounts();
     } catch (err) {
-      alert('重新登录失败：' + (err.message || '未知错误'));
+      showToast('重新登录失败：' + (err.message || '未知错误'));
       console.error(err);
     }
   };
@@ -377,6 +400,19 @@ function App() {
       <DotsGrid className="absolute top-40 right-12 opacity-10" color="#87CEEB" rows={2} cols={3} />
 
       <div className="max-w-6xl mx-auto relative z-10">
+        {toasts.length > 0 && (
+          <div className="fixed top-4 right-4 z-[60] space-y-2 pointer-events-none">
+            {toasts.map((toast) => (
+              <div
+                key={toast.id}
+                className={`max-w-sm px-4 py-3 rounded-lg border-[3px] border-dark shadow-brutal-md font-bold text-dark animate-[scale-in_0.15s_ease-out] ${toast.type === 'success' ? 'bg-mint' : 'bg-coral'}`}
+              >
+                {toast.message}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Logo 和品牌标题 */}
         <div className="flex items-center justify-center mb-8">
           <img src="./pigbun-logo.svg" alt="PigBun-AI" className="w-16 h-16 mr-4" />

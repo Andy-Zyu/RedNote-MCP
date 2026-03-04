@@ -9,8 +9,8 @@ export class EngagementTools extends BaseTools {
     const url = this.extractRedBookUrl(noteUrl)
     logger.info(`Liking note: ${url}`)
 
-    const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage(accountId)
+    const bm = BrowserManager.getInstance(accountId)
+    const lease = await bm.acquirePage()
     try {
       const page = lease.page
       this.page = page
@@ -70,8 +70,8 @@ export class EngagementTools extends BaseTools {
     const url = this.extractRedBookUrl(noteUrl)
     logger.info(`Collecting note: ${url}`)
 
-    const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage(accountId)
+    const bm = BrowserManager.getInstance(accountId)
+    const lease = await bm.acquirePage()
     try {
       const page = lease.page
       this.page = page
@@ -138,8 +138,8 @@ export class EngagementTools extends BaseTools {
     const url = this.extractRedBookUrl(noteUrl)
     logger.info(`Following author from note: ${url}`)
 
-    const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage(accountId)
+    const bm = BrowserManager.getInstance(accountId)
+    const lease = await bm.acquirePage()
     try {
       const page = lease.page
       this.page = page

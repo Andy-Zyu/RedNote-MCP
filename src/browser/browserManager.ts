@@ -55,20 +55,29 @@ export class BrowserManager {
     return browserManagers.get(accountId)!
   }
 
-  async acquirePage(accountId?: string): Promise<PageLease> {
+  async acquirePage(accountId?: string, options?: { skipValidation?: boolean }): Promise<PageLease> {
     // If accountId is provided, delegate to the account-specific instance
     if (accountId && accountId !== this.accountId) {
       const accountManager = BrowserManager.getInstance(accountId)
-      return accountManager.acquirePage()
+      return accountManager.acquirePage(undefined, options)
     }
 
     this.clearIdleTimer()
 
     if (!this.context) {
-      await this.launchBrowser()
+      await this.launchBrowser(options?.skipValidation)
     }
 
     const page = await this.context!.newPage()
+
+    // Inject cookies from disk for this account (ensures latest login state is used)
+    if (this.accountId) {
+      const cookies = await this.cookieManager.loadCookies()
+      if (cookies.length > 0) {
+        await this.context!.addCookies(cookies)
+      }
+    }
+
     const leaseId = String(++this.leaseCounter)
     this.activeLeases.set(leaseId, page)
     logger.info(`Page lease acquired: ${leaseId} for account: ${this.accountId || 'default'} (active: ${this.activeLeases.size})`)
@@ -212,7 +221,7 @@ export class BrowserManager {
     process.on('SIGTERM', () => { handler().finally(() => process.exit(0)) })
   }
 
-  private async launchBrowser(): Promise<void> {
+  private async launchBrowser(skipValidation?: boolean): Promise<void> {
     const accountLabel = this.accountId || 'default'
     const profileDir = path.join(os.homedir(), '.mcp', 'rednote', 'profiles', accountLabel)
 
@@ -239,7 +248,9 @@ export class BrowserManager {
 
         this.isBrowserOwner = false
         logger.info(`Successfully connected to shared browser server for account: ${accountLabel}`)
-        await this.validateSession(accountLabel)
+        if (!skipValidation) {
+          await this.validateSession(accountLabel)
+        }
         this.setupBrowserEvents(accountLabel)
         return
       } catch (err) {
@@ -328,6 +339,7 @@ export class BrowserManager {
           '--disable-blink-features=AutomationControlled',
           '--disable-shared-workers',
           '--disable-background-networking',
+          '--start-minimized', // Auto minimize on launch
         ],
         ignoreDefaultArgs: ['--enable-automation']
       })
@@ -385,7 +397,9 @@ export class BrowserManager {
         await this.context.addCookies(cookies)
       }
 
-      await this.validateSession(accountLabel)
+      if (!skipValidation) {
+        await this.validateSession(accountLabel)
+      }
       this.setupBrowserEvents(accountLabel)
     } finally {
       // Always release the launch lock

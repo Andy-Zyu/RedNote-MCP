@@ -42,8 +42,8 @@ export class RedNoteTools extends BaseTools {
 
   async searchNotes(keywords: string, limit: number = 10, accountId?: string): Promise<Note[]> {
     logger.info(`Searching notes with keywords: ${keywords}, limit: ${limit}`)
-    const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage(accountId)
+    const bm = BrowserManager.getInstance(accountId)
+    const lease = await bm.acquirePage()
     try {
       const interceptor = new SearchInterceptor(lease.page, keywords, limit)
       const result = await interceptor.intercept(async () => {
@@ -71,8 +71,8 @@ export class RedNoteTools extends BaseTools {
 
   async getNoteContent(url: string, accountId?: string): Promise<NoteDetail> {
     logger.info(`Getting note content for URL: ${url}`)
-    const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage(accountId)
+    const bm = BrowserManager.getInstance(accountId)
+    const lease = await bm.acquirePage()
     try {
       const actualURL = this.extractRedBookUrl(url)
       const interceptor = new NoteDetailInterceptor(lease.page, actualURL)
@@ -97,8 +97,8 @@ export class RedNoteTools extends BaseTools {
 
   async getNoteComments(url: string, accountId?: string): Promise<Comment[]> {
     logger.info(`Getting comments for URL: ${url}`)
-    const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage(accountId)
+    const bm = BrowserManager.getInstance(accountId)
+    const lease = await bm.acquirePage()
     try {
       const interceptor = new NoteCommentsInterceptor(lease.page)
       const result = await interceptor.intercept(async () => {
@@ -508,8 +508,8 @@ export class RedNoteTools extends BaseTools {
 
   async getDashboardOverview(period: string = '7days', accountId?: string): Promise<DashboardOverview> {
     logger.info(`Getting dashboard overview for period: ${period}`)
-    const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage(accountId)
+    const bm = BrowserManager.getInstance(accountId)
+    const lease = await bm.acquirePage()
     let activePage: Page | null = null
     try {
       const targetUrl = 'https://creator.xiaohongshu.com/statistics/account/v2'
@@ -536,8 +536,8 @@ export class RedNoteTools extends BaseTools {
     accountId?: string
   }): Promise<ContentAnalytics> {
     logger.info('Getting content analytics')
-    const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage(options?.accountId)
+    const bm = BrowserManager.getInstance(options?.accountId)
+    const lease = await bm.acquirePage()
     let activePage: Page | null = null
     try {
       const targetUrl = 'https://creator.xiaohongshu.com/statistics/data-analysis'
@@ -560,8 +560,8 @@ export class RedNoteTools extends BaseTools {
 
   async getFansAnalytics(period: string = '7days', accountId?: string): Promise<FansAnalytics> {
     logger.info(`Getting fans analytics for period: ${period}`)
-    const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage(accountId)
+    const bm = BrowserManager.getInstance(accountId)
+    const lease = await bm.acquirePage()
     let activePage: Page | null = null
     try {
       const targetUrl = 'https://creator.xiaohongshu.com/statistics/fans-data'

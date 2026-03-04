@@ -32,8 +32,8 @@ export class CommentTools extends BaseTools {
     accountId?: string
   }): Promise<CommentResult> {
     logger.info(`Commenting on note: ${options.noteUrl}`)
-    const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage(options.accountId)
+    const bm = BrowserManager.getInstance(options.accountId)
+    const lease = await bm.acquirePage()
     try {
       const page = lease.page
       this.page = page
@@ -97,8 +97,8 @@ export class CommentTools extends BaseTools {
     accountId?: string
   }): Promise<ReplyCommentResult> {
     logger.info(`Replying to comment by ${options.commentAuthor} on ${options.noteUrl}`)
-    const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage(options.accountId)
+    const bm = BrowserManager.getInstance(options.accountId)
+    const lease = await bm.acquirePage()
     try {
       const page = lease.page
       this.page = page

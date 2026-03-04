@@ -918,16 +918,7 @@ ${isDefault ? '(默认账号)' : ''}
             const lastCheckTime = now.toISOString()
 
             // 判断状态：有 Cookie 且最近登录过视为 active
-            let status: 'active' | 'inactive' | 'unknown' = 'unknown'
-            if (hasCookies && lastLoginTime) {
-              // 如果最后登录时间在 30 天内，视为 active
-              const daysSinceLogin = (now.getTime() - lastLoginTime.getTime()) / (1000 * 60 * 60 * 24)
-              status = daysSinceLogin <= 30 ? 'active' : 'inactive'
-            } else if (hasCookies) {
-              status = 'active'
-            } else {
-              status = 'inactive'
-            }
+            let status: 'active' | 'inactive' = hasCookies ? 'active' : 'inactive'
 
             return {
               id: acc.id,
@@ -942,8 +933,7 @@ ${isDefault ? '(默认账号)' : ''}
           const summary = {
             total: accountStatuses.length,
             active: accountStatuses.filter(s => s.status === 'active').length,
-            inactive: accountStatuses.filter(s => s.status === 'inactive').length,
-            unknown: accountStatuses.filter(s => s.status === 'unknown').length
+            inactive: accountStatuses.filter(s => s.status === 'inactive').length
           }
 
           const result = {

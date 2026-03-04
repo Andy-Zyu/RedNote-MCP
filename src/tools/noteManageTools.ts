@@ -14,8 +14,8 @@ import {
 export class NoteManageTools extends BaseTools {
   async getMyNotes(accountId?: string): Promise<MyNotesResult> {
     logger.info('Getting my notes from creator center')
-    const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage(accountId)
+    const bm = BrowserManager.getInstance(accountId)
+    const lease = await bm.acquirePage()
     let creatorPage: Page | null = null
     try {
       // SSO into creator center — land on publish page first

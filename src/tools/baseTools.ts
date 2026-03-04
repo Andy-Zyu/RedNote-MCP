@@ -117,15 +117,36 @@ export abstract class BaseTools {
   /**
    * Navigate to a creator center page via SSO.
    * Creator subdomain requires SSO — we must first visit the main site,
-   * click the publish link (which triggers SSO in a new tab), then navigate
-   * to the target URL within that authenticated tab.
+   * Navigate to a creator center page.
+   * Fast path: directly navigate with existing cookies (no SSO needed).
+   * Fallback: SSO flow via publish link click if direct access fails.
    */
   protected async navigateToCreator(lease: PageLease, targetUrl: string): Promise<Page> {
     const page = lease.page
 
+    // === Fast path: try direct navigation first ===
+    try {
+      const testPage = await page.context().newPage()
+      await testPage.goto(targetUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      })
+      const url = testPage.url()
+      if (!url.includes('login') && !url.includes('cas') && !url.includes('sso')) {
+        logger.info(`[navigateToCreator] Direct access succeeded: ${url}`)
+        return testPage
+      }
+      logger.info(`[navigateToCreator] Direct access redirected to: ${url}, falling back to SSO`)
+      await testPage.close()
+    } catch (err) {
+      logger.warn('[navigateToCreator] Direct access failed, falling back to SSO:', err)
+    }
+
+    // === SSO fallback: load main site, click publish link ===
+    logger.info('[navigateToCreator] Using SSO fallback flow')
     await page.goto('https://www.xiaohongshu.com', {
       waitUntil: 'domcontentloaded',
-      timeout: 30000
+      timeout: 30000,
     })
     logger.info('Main site loaded for SSO trigger')
     this.checkCaptchaRedirect(page)
@@ -137,7 +158,7 @@ export abstract class BaseTools {
 
     const [creatorPage] = await Promise.all([
       page.context().waitForEvent('page', { timeout: 60000 }),
-      publishLink.first().click()
+      publishLink.first().click(),
     ])
     await creatorPage.waitForLoadState('domcontentloaded', { timeout: 60000 })
     logger.info(`SSO complete, creator tab on: ${creatorPage.url()}`)
@@ -151,7 +172,7 @@ export abstract class BaseTools {
     if (!creatorUrl.includes(new URL(targetUrl).pathname)) {
       await creatorPage.goto(targetUrl, {
         waitUntil: 'domcontentloaded',
-        timeout: 30000
+        timeout: 30000,
       })
       logger.info(`Navigated to target: ${creatorPage.url()}`)
     }
@@ -169,8 +190,8 @@ export abstract class BaseTools {
     callback: (creatorPage: Page) => Promise<T>,
     accountId?: string,
   ): Promise<T> {
-    const bm = BrowserManager.getInstance()
-    const lease = await bm.acquirePage(accountId)
+    const bm = BrowserManager.getInstance(accountId)
+    const lease = await bm.acquirePage()
     let creatorPage: Page | null = null
     try {
       creatorPage = await this.navigateToCreator(lease, targetUrl)
