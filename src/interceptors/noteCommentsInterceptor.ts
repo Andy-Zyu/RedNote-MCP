@@ -34,17 +34,18 @@ export class NoteCommentsInterceptor extends BaseInterceptor<Comment[]> {
   async fallbackDom(): Promise<Comment[]> {
     logger.info('Using DOM fallback for comments')
 
-    await this.page.waitForSelector('[role="dialog"] [role="list"]', { timeout: 15000 })
+    await this.page.waitForSelector('.comments-container, .comment-item', { timeout: 15000 })
 
     const comments = await this.page.evaluate(() => {
-      const items = document.querySelectorAll('[role="dialog"] [role="list"] [role="listitem"]')
+      const items = document.querySelectorAll('.comment-item')
       const results: { author: string; content: string; likes: number; time: string }[] = []
 
       items.forEach((item) => {
-        const author = item.querySelector('[data-testid="user-name"]')?.textContent?.trim() || ''
-        const content = item.querySelector('[data-testid="comment-content"]')?.textContent?.trim() || ''
-        const likes = parseInt(item.querySelector('[data-testid="likes-count"]')?.textContent || '0')
-        const time = item.querySelector('time')?.textContent?.trim() || ''
+        const author = item.querySelector('.author a.name')?.textContent?.trim() || ''
+        const content = item.querySelector('.content .note-text')?.textContent?.trim() || ''
+        const likes = parseInt(item.querySelector('.like-wrapper .count')?.textContent || '0')
+        const dateEl = item.querySelector('.date')
+        const time = dateEl?.textContent?.trim() || ''
         results.push({ author, content, likes, time })
       })
 

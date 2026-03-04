@@ -15,7 +15,11 @@ export const MONITOR_INTERVAL = {
   ACCOUNT_HEALTH: 10 * 60 * 1000, // 10分钟
   SUBSCRIPTION: 5 * 60 * 1000, // 5分钟
   HEARTBEAT: 60 * 1000, // 60秒
+  SESSION_HEARTBEAT: 10 * 60 * 1000, // 10分钟（Session 保活）
 } as const
+
+// Session 检查缓存
+export const SESSION_CHECK_CACHE_TTL = 60 * 1000 // 60秒内不重复检查
 
 // 页面超时
 export const PAGE_TIMEOUT = {

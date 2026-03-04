@@ -7,10 +7,11 @@ import { startScan, abortScan } from './scanner';
 import logger from '../utils/logger';
 import { authMiddleware, checkWebSocketAuth } from './middleware/auth';
 import { AccountHealthMonitor } from '../monitor/accountHealthMonitor';
+import { SessionHeartbeat } from '../monitor/sessionHeartbeat';
 import { extractParam } from '../utils/paramExtractor';
 
 export interface WsMessage {
-  type: 'qrcode' | 'status' | 'error' | 'success' | 'accounts' | 'account_health' | 'subscription_downgrade';
+  type: 'qrcode' | 'status' | 'error' | 'success' | 'accounts' | 'account_health' | 'session_expired' | 'subscription_downgrade';
   scanId?: string;
   data?: string;
   status?: string;
@@ -43,6 +44,9 @@ export const activeScans = new Map<string, AbortController>();
 
 // Account health monitor instance
 let healthMonitor: AccountHealthMonitor | null = null;
+
+// Session heartbeat instance
+let sessionHeartbeat: SessionHeartbeat | null = null;
 
 // Track server instance
 let serverInstance: http.Server | null = null;
@@ -303,6 +307,19 @@ export async function startMatrixServer(port: number = 3001): Promise<http.Serve
       healthMonitor.start();
       logger.info('Account health monitor started');
 
+      // 启动 Session 心跳
+      sessionHeartbeat = new SessionHeartbeat();
+      sessionHeartbeat.setSessionExpiredCallback((accountId, accountName) => {
+        logger.warn(`Session expired for account: ${accountName} (${accountId})`);
+        broadcast({
+          type: 'session_expired',
+          accountId,
+          data: accountName,
+        });
+      });
+      sessionHeartbeat.start();
+      logger.info('Session heartbeat started');
+
       resolve(server);
     });
 
@@ -314,6 +331,13 @@ export async function startMatrixServer(port: number = 3001): Promise<http.Serve
 
 export function stopMatrixServer(server: http.Server): Promise<void> {
   return new Promise((resolve, reject) => {
+    // 停止 Session 心跳
+    if (sessionHeartbeat) {
+      sessionHeartbeat.stop();
+      sessionHeartbeat = null;
+      logger.info('Session heartbeat stopped');
+    }
+
     // 停止账号健康监测
     if (healthMonitor) {
       healthMonitor.stop();

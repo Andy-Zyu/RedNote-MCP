@@ -5,10 +5,15 @@ import * as path from 'path'
 import * as os from 'os'
 import * as fs from 'fs'
 import logger from '../utils/logger'
+import { SESSION_CHECK_CACHE_TTL } from '../constants/timeouts'
+import { SELECTORS } from '../selectors'
 
 const COOKIE_PATH = path.join(os.homedir(), '.mcp', 'rednote', 'cookies.json')
 const PROFILE_DIR = path.join(os.homedir(), '.mcp', 'rednote', 'browser-profile')
-const IDLE_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000 // 30 minutes (heartbeat handles keep-alive)
+
+// Cache for session validity checks: accountId -> last check timestamp
+const sessionCheckCache = new Map<string, number>()
 
 export interface PageLease {
   readonly page: Page
@@ -31,7 +36,7 @@ export class BrowserManager {
   private constructor(accountId?: string) {
     this.accountId = accountId
     // Use account-specific cookie path if accountId is provided
-    const cookiePath = accountId 
+    const cookiePath = accountId
       ? path.join(os.homedir(), '.mcp', 'rednote', 'accounts', accountId, 'cookies.json')
       : COOKIE_PATH
     this.cookieManager = new CookieManager(cookiePath, accountId)
@@ -46,7 +51,7 @@ export class BrowserManager {
       }
       return BrowserManager.instance
     }
-    
+
     // For account-specific: use cached instance
     if (!browserManagers.has(accountId)) {
       browserManagers.set(accountId, new BrowserManager(accountId))
@@ -224,6 +229,60 @@ export class BrowserManager {
     }
     logger.info(`Loading ${cookies.length} cookies into context for account: ${accountLabel}`)
     await this.context.addCookies(cookies)
+
+    // Session validity pre-check (cached, skip if checked recently)
+    await this.validateSession(accountLabel)
+  }
+
+  /**
+   * Validate session by visiting the homepage and checking login status.
+   * Results are cached for SESSION_CHECK_CACHE_TTL to avoid redundant checks.
+   */
+  private async validateSession(accountLabel: string): Promise<void> {
+    const cacheKey = this.accountId || 'default'
+    const lastCheck = sessionCheckCache.get(cacheKey)
+    const now = Date.now()
+
+    if (lastCheck && (now - lastCheck) < SESSION_CHECK_CACHE_TTL) {
+      logger.info(`Session check cached for account: ${accountLabel}, skipping`)
+      return
+    }
+
+    logger.info(`Validating session for account: ${accountLabel}`)
+    const page = await this.context!.newPage()
+
+    try {
+      await page.goto('https://www.xiaohongshu.com/explore', {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      })
+      await page.waitForTimeout(3000)
+
+      const isLoggedIn = await page.evaluate((sidebarSel: string) => {
+        const sidebar = document.querySelector(sidebarSel)
+        return sidebar?.textContent?.trim() === '我'
+      }, SELECTORS.auth.sidebarUser)
+
+      if (isLoggedIn) {
+        sessionCheckCache.set(cacheKey, now)
+        logger.info(`Session valid for account: ${accountLabel}`)
+      } else {
+        sessionCheckCache.delete(cacheKey)
+        throw new Error(
+          `账号 ${accountLabel} 的登录 Session 已过期，请先调用 login 工具重新扫码登录。`
+        )
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Session 已过期')) {
+        throw error
+      }
+      logger.warn(`Session validation failed for ${accountLabel}, proceeding anyway:`, error)
+      // Don't block on network errors — let the actual tool call handle it
+    } finally {
+      if (!page.isClosed()) {
+        await page.close()
+      }
+    }
   }
 
   private resetIdleTimer(): void {

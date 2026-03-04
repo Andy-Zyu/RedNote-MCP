@@ -44,12 +44,12 @@ export const SELECTORS = {
   },
 
   comments: {
-    commentList: '[role="dialog"] [role="list"]',
-    commentItem: '[role="dialog"] [role="list"] [role="listitem"]',
-    userName: '[data-testid="user-name"]',
-    commentContent: '[data-testid="comment-content"]',
-    likesCount: '[data-testid="likes-count"]',
-    time: 'time',
+    commentList: '.comments-container',
+    commentItem: '.comment-item',
+    userName: '.author a.name',
+    commentContent: '.content .note-text',
+    likesCount: '.like-wrapper .count',
+    time: '.date',
   },
 
   publish: {
