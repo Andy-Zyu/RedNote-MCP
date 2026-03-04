@@ -250,6 +250,18 @@ export class BrowserManager {
 
     // === Step 2: Launch a new shared browser server (we are the owner) ===
     // Use atomic file creation to prevent race condition: only one process should launch
+    // First, clean up stale launch locks (older than 30 seconds = crashed process)
+    if (fs.existsSync(launchLockFile)) {
+      try {
+        const lockStat = fs.statSync(launchLockFile)
+        const lockAge = Date.now() - lockStat.mtimeMs
+        if (lockAge > 30000) {
+          logger.warn(`Removing stale launch lock (age: ${Math.round(lockAge / 1000)}s) for account: ${accountLabel}`)
+          fs.unlinkSync(launchLockFile)
+        }
+      } catch (e) { /* ignore */ }
+    }
+
     let launchLockFd: number | null = null
     try {
       launchLockFd = fs.openSync(launchLockFile, 'wx') // 'wx' = create exclusive, fails if exists
@@ -257,23 +269,44 @@ export class BrowserManager {
     } catch (err) {
       // Another process is launching, wait for it to finish and re-check
       logger.info(`Launch lock held by another process, waiting for account: ${accountLabel}`)
-      for (let i = 0; i < 50; i++) { // Wait up to 5 seconds
+      for (let i = 0; i < 100; i++) { // Wait up to 10 seconds
         await new Promise(r => setTimeout(r, 100))
         if (!fs.existsSync(launchLockFile)) {
           // Lock released, try connecting to the newly launched browser
           if (fs.existsSync(lockFile)) {
-            const wsEndpoint = fs.readFileSync(lockFile, 'utf-8').trim()
-            this.browser = await chromium.connectOverCDP({ endpointURL: wsEndpoint, timeout: 10000 })
-            this.context = this.browser.contexts()[0]
-            if (this.context) {
-              this.isBrowserOwner = false
-              this.setupBrowserEvents(accountLabel)
-              return
+            try {
+              const wsEndpoint = fs.readFileSync(lockFile, 'utf-8').trim()
+              this.browser = await chromium.connectOverCDP({ endpointURL: wsEndpoint, timeout: 10000 })
+              this.context = this.browser.contexts()[0]
+              if (this.context) {
+                this.isBrowserOwner = false
+                this.setupBrowserEvents(accountLabel)
+                return
+              }
+            } catch (connectErr) {
+              logger.warn(`Failed to connect after lock released, will retry launch: ${connectErr}`)
             }
+          }
+          // Lock released but no valid browser to connect to — try to acquire lock ourselves
+          try {
+            launchLockFd = fs.openSync(launchLockFile, 'wx')
+            logger.info(`Acquired launch lock after wait for account: ${accountLabel}`)
+            break
+          } catch (e) {
+            // Another process grabbed it first, keep waiting
           }
         }
       }
-      throw new Error(`Timeout waiting for launch lock for account: ${accountLabel}`)
+      if (launchLockFd === null) {
+        // Last resort: force remove stale lock and try once more
+        logger.warn(`Force removing launch lock for account: ${accountLabel}`)
+        try { fs.unlinkSync(launchLockFile) } catch (e) { }
+        try {
+          launchLockFd = fs.openSync(launchLockFile, 'wx')
+        } catch (e) {
+          throw new Error(`Cannot acquire launch lock for account: ${accountLabel}`)
+        }
+      }
     }
 
     try {
