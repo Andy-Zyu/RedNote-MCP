@@ -1,0 +1,77 @@
+
+services:
+  # ========================================
+  # Browser Manager（长驻核心服务）
+  # 管理所有 Chromium 实例、Session 心跳、Cookie 持久化
+  # 即使 MCP Server 重启，浏览器保持运行
+  # ========================================
+  browser-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile.browser
+    container_name: rednote-browsers
+    restart: unless-stopped
+    ports:
+      - "${MATRIX_PORT:-3001}:3001"     # Matrix Web API + WebSocket
+      - "${NOVNC_PORT:-6080}:6080"      # noVNC (远程扫码)
+      - "9222-9230:9222-9230"           # CDP debugging ports (remote browser access)
+    volumes:
+      - profiles-data:/root/.mcp/rednote/profiles
+      - accounts-data:/root/.mcp/rednote
+      - logs-data:/root/.mcp/rednote/logs
+    environment:
+      - PIGBUN_API_KEY=${PIGBUN_API_KEY}
+      - ENABLE_VNC=${ENABLE_VNC:-true}
+      - MATRIX_PORT=3001
+      - NOVNC_PORT=6080
+      - DISPLAY=:99
+      - NODE_ENV=production
+    shm_size: "2g"
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2.0"
+        reservations:
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ========================================
+  # MCP Server（轻量级，可随时重启）
+  # 只处理 MCP stdio 协议，通过 HTTP 连接 Browser Manager
+  # 不启动任何浏览器
+  # ========================================
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: rednote-mcp
+    stdin_open: true
+    tty: true
+    depends_on:
+      browser-manager:
+        condition: service_healthy
+    environment:
+      - PIGBUN_API_KEY=${PIGBUN_API_KEY}
+      - BROWSER_MANAGER_URL=http://browser-manager:3001
+      - NODE_ENV=production
+    volumes:
+      - logs-data:/root/.mcp/rednote/logs
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+volumes:
+  profiles-data:
+    driver: local
+  accounts-data:
+    driver: local
+  logs-data:
+    driver: local

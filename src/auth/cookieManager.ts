@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Cookie } from 'playwright';
+import { Cookie } from 'patchright';
 import { AccountManager, accountManager } from './accountManager';
 import logger from '../utils/logger';
 

@@ -54,7 +54,7 @@ describe('withAccountId() 单元测试', () => {
       expect(result.accountId).toBeDefined()
     })
 
-    test('accountId 应为可选参数', () => {
+    test('accountId 应为必填参数', () => {
       const baseSchema = {
         title: z.string()
       }
@@ -62,8 +62,8 @@ describe('withAccountId() 单元测试', () => {
       const result = withAccountId(baseSchema, true)
       const accountIdSchema = result.accountId as any
 
-      // 验证是可选的
-      expect(accountIdSchema._def.typeName).toBe('ZodOptional')
+      // 验证不是 optional 包装
+      expect(accountIdSchema._def.typeName).not.toBe('ZodOptional')
     })
 
     test('accountId 应有正确的描述', () => {
@@ -74,7 +74,7 @@ describe('withAccountId() 单元测试', () => {
       const result = withAccountId(baseSchema, true)
       const accountIdSchema = result.accountId as any
 
-      expect(accountIdSchema.description).toBe('账号 ID（可选，不传则使用默认账号）')
+      expect(accountIdSchema.description).toBe('账号 ID（多账号模式必填）')
     })
 
     test('应保留原始 schema 的所有字段', () => {
@@ -167,8 +167,8 @@ describe('withAccountId() 单元测试', () => {
 
       const schema = z.object(withAccountId(baseSchema, true))
 
-      // 有效输入 - 不带 accountId
-      expect(() => schema.parse({ title: 'test', content: 'content' })).not.toThrow()
+      // 无效输入 - 缺少 accountId
+      expect(() => schema.parse({ title: 'test', content: 'content' })).toThrow()
 
       // 有效输入 - 带 accountId
       const result = schema.parse({ title: 'test', content: 'content', accountId: 'acc_123' })

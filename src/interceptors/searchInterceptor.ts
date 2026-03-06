@@ -1,4 +1,4 @@
-import { Page, Response } from 'playwright'
+import { Page, Response } from 'patchright'
 import { BaseInterceptor } from './baseInterceptor'
 import { Note } from '../tools/types'
 import logger from '../utils/logger'
@@ -7,7 +7,7 @@ export class SearchInterceptor extends BaseInterceptor<Note[]> {
   private readonly keywords: string
   private readonly limit: number
 
-  constructor(page: Page, keywords: string, limit: number, timeoutMs: number = 15000) {
+  constructor(page: Page, keywords: string, limit: number, timeoutMs: number = 30000) {
     super(page, timeoutMs)
     this.keywords = keywords
     this.limit = limit
@@ -83,36 +83,7 @@ export class SearchInterceptor extends BaseInterceptor<Note[]> {
   }
 
   async fallbackDom(): Promise<Note[]> {
-    logger.info('Using DOM fallback for search results')
-
-    await this.page.waitForSelector('.feeds-container', { timeout: 30000 })
-
-    const notes = await this.page.evaluate((limit: number) => {
-      const items = document.querySelectorAll('.feeds-container .note-item')
-      const results: Note[] = []
-
-      for (let i = 0; i < Math.min(items.length, limit); i++) {
-        const item = items[i]
-        const linkEl = item.querySelector('a.cover.mask.ld') as HTMLAnchorElement | null
-        const titleEl = item.querySelector('.title span, .note-item-title, .title')
-        const authorEl = item.querySelector('.author-wrapper .name, .author .name')
-
-        const href = linkEl?.getAttribute('href') || ''
-        const noteId = href.match(/\/explore\/([a-f0-9]+)/)?.[1] || ''
-
-        results.push({
-          title: titleEl?.textContent?.trim() || '',
-          content: '',
-          tags: [],
-          url: noteId ? `https://www.xiaohongshu.com/explore/${noteId}` : '',
-          author: authorEl?.textContent?.trim() || '',
-        })
-      }
-
-      return results
-    }, this.limit)
-
-    logger.info(`DOM fallback extracted ${notes.length} notes`)
-    return notes
+    logger.warn('Search API timed out. DOM fallback is disabled because missing xsec_token triggers anti-bot risk control.')
+    throw new Error('Search API timeout. Please try again. DOM fallback is disabled for search to prevent account risk control (Missing xsec_token).')
   }
 }

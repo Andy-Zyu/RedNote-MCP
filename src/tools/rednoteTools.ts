@@ -1,4 +1,4 @@
-import { Page } from 'playwright'
+import { Page } from 'patchright'
 import logger from '../utils/logger'
 import { BrowserManager, PageLease } from '../browser/browserManager'
 import { BaseTools } from './baseTools'
@@ -47,12 +47,31 @@ export class RedNoteTools extends BaseTools {
     try {
       const interceptor = new SearchInterceptor(lease.page, keywords, limit)
       const result = await interceptor.intercept(async () => {
-        await lease.page.goto(
-          `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(keywords)}`,
-          { waitUntil: 'domcontentloaded', timeout: 30000 }
-        )
-        this.checkCaptchaRedirect(lease.page)
+        const currentUrl = lease.page.url()
+        const isOnXHS = currentUrl.includes('xiaohongshu.com') && !currentUrl.includes('about:blank')
+
+        if (!isOnXHS) {
+          await this.humanNavigate(lease.page, 'https://www.xiaohongshu.com/explore')
+        }
+
+        const searchInput = lease.page.locator('input.search-input')
+        if (await searchInput.count() > 0) {
+          logger.info('[searchNotes] Simulating human search input')
+          await this.simulateMouseMovement(lease.page)
+          await searchInput.click()
+          await this.randomDelay(0.5, 1.0)
+          await lease.page.keyboard.type(keywords, { delay: 100 })
+          await this.randomDelay(0.5, 1.0)
+          await lease.page.keyboard.press('Enter')
+        } else {
+          logger.info('[searchNotes] Search box not found, falling back to direct navigation')
+          const searchUrl = `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(keywords)}&source=web_search_box&type=1`
+          await this.humanNavigate(lease.page, searchUrl)
+        }
       })
+
+      // Check for captcha AFTER intercept — triggerAction catch may have swallowed it
+      this.checkCaptchaRedirect(lease.page)
 
       if (result.success && result.data) {
         logger.info(`Search returned ${result.data.length} notes via ${result.source}`)
@@ -77,9 +96,11 @@ export class RedNoteTools extends BaseTools {
       const actualURL = this.extractRedBookUrl(url)
       const interceptor = new NoteDetailInterceptor(lease.page, actualURL)
       const result = await interceptor.intercept(async () => {
-        await lease.page.goto(actualURL, { waitUntil: 'domcontentloaded', timeout: 30000 })
-        this.checkCaptchaRedirect(lease.page)
+        await this.humanNavigate(lease.page, actualURL)
       })
+
+      // Check for captcha AFTER intercept — triggerAction catch may have swallowed it
+      this.checkCaptchaRedirect(lease.page)
 
       if (result.success && result.data) {
         logger.info(`Note detail returned via ${result.source}: ${result.data.title}`)
@@ -102,9 +123,11 @@ export class RedNoteTools extends BaseTools {
     try {
       const interceptor = new NoteCommentsInterceptor(lease.page)
       const result = await interceptor.intercept(async () => {
-        await lease.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
-        this.checkCaptchaRedirect(lease.page)
+        await this.humanNavigate(lease.page, url)
       })
+
+      // Check for captcha AFTER intercept — triggerAction catch may have swallowed it
+      this.checkCaptchaRedirect(lease.page)
 
       if (result.success && result.data) {
         logger.info(`Comments returned ${result.data.length} via ${result.source}`)

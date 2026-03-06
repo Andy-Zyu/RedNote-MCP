@@ -1,6 +1,6 @@
 import { Note, NoteDetail } from './types'
 import logger from '../utils/logger'
-import { Page } from 'playwright'
+import { Page } from 'patchright'
 
 export { NoteDetail } from './types'
 

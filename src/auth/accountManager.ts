@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { Cookie } from 'playwright';
+import { Cookie } from 'patchright';
 import logger from '../utils/logger';
 
 /**
@@ -203,11 +203,25 @@ export class AccountManager {
       throw new Error(`Account not found: ${accountId}`);
     }
 
-    // 删除账号目录
+    // 删除账号目录 (accounts/acc_xxx)
     const accountDir = path.join(this.accountsDir, accountId);
     if (fs.existsSync(accountDir)) {
       fs.rmSync(accountDir, { recursive: true });
       logger.info(`Deleted account directory: ${accountDir}`);
+    }
+
+    // 删除浏览器 profile 目录 (profiles/acc_xxx)
+    const profileDir = path.join(this.baseDir, 'profiles', accountId);
+    if (fs.existsSync(profileDir)) {
+      fs.rmSync(profileDir, { recursive: true });
+      logger.info(`Deleted browser profile: ${profileDir}`);
+    }
+
+    // 删除 cookies 目录 (cookies/acc_xxx)
+    const cookiesDir = path.join(this.baseDir, 'cookies', accountId);
+    if (fs.existsSync(cookiesDir)) {
+      fs.rmSync(cookiesDir, { recursive: true });
+      logger.info(`Deleted cookies directory: ${cookiesDir}`);
     }
 
     // 从索引中移除
@@ -307,11 +321,41 @@ export class AccountManager {
   }
 
   /**
-   * 检查账号是否存在 Cookie
+   * 检查账号是否存在有效 Cookie (包含 web_session 且未过期)
    */
   hasCookies(accountId?: string): boolean {
     const cookiePath = this.getCookiePath(accountId);
-    return fs.existsSync(cookiePath);
+    if (!fs.existsSync(cookiePath)) {
+      return false;
+    }
+
+    try {
+      const data = fs.readFileSync(cookiePath, 'utf-8');
+      const cookies = JSON.parse(data) as Cookie[];
+
+      const webSession = cookies.find(c => c.name === 'web_session');
+      if (!webSession || !webSession.value) {
+        // 无效的 cookie 文件，直接删除
+        fs.unlinkSync(cookiePath);
+        logger.warn(`Deleted invalid cookie file at: ${cookiePath} (missing web_session)`);
+        return false;
+      }
+
+      // 检查是否过期 (expires = -1 意味着 session cookie，通常认为是有效的直到主动注销)
+      const now = Math.floor(Date.now() / 1000);
+      if (webSession.expires > 0 && webSession.expires < now) {
+        // Cookie 已过期，删除文件
+        fs.unlinkSync(cookiePath);
+        logger.warn(`Deleted expired cookie file at: ${cookiePath} (web_session expired)`);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      logger.error(`Failed to parse cookies at ${cookiePath}:`, error);
+      // 有问题的 JSON 结构，保守起见可能需要考虑删掉，这里简单先返回 false
+      return false;
+    }
   }
 
   /**

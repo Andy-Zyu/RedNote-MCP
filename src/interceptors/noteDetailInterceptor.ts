@@ -1,4 +1,4 @@
-import { Page } from 'playwright'
+import { Page } from 'patchright'
 import { BaseInterceptor } from './baseInterceptor'
 import { NoteDetail } from '../tools/types'
 import { GetNoteDetail } from '../tools/noteDetail'
@@ -7,7 +7,7 @@ import logger from '../utils/logger'
 export class NoteDetailInterceptor extends BaseInterceptor<NoteDetail> {
   private readonly noteUrl: string
 
-  constructor(page: Page, noteUrl: string, timeoutMs: number = 15000) {
+  constructor(page: Page, noteUrl: string, timeoutMs: number = 30000) {
     super(page, timeoutMs)
     this.noteUrl = noteUrl
   }

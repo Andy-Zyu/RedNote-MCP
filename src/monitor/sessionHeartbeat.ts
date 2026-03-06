@@ -94,20 +94,29 @@ export class SessionHeartbeat extends BaseMonitor {
 
     /**
      * 刷新所有账号的 session
+     * 关键改进：每个账号之间加入 1~3 分钟随机延迟，
+     * 避免同一时间窗口内多账号密集访问触发小红书风控
      */
     private async refreshAllSessions(): Promise<void> {
         const accounts = accountManager.listAccounts()
-        logger.info(`[SessionHeartbeat] Refreshing sessions for ${accounts.length} accounts`)
+        const activeAccounts = accounts.filter(a => accountManager.hasCookies(a.id))
+        logger.info(`[SessionHeartbeat] Refreshing sessions for ${activeAccounts.length}/${accounts.length} accounts (with randomized delays)`)
 
-        for (const account of accounts) {
-            // 只刷新有 cookies 的账号
-            if (!accountManager.hasCookies(account.id)) {
-                continue
+        for (let i = 0; i < activeAccounts.length; i++) {
+            const account = activeAccounts[i]
+
+            // 第一个账号之后，每个账号间加入 1~3 分钟随机延迟
+            if (i > 0) {
+                const delayMs = (60 + Math.random() * 120) * 1000 // 60~180 seconds
+                logger.info(`[SessionHeartbeat] Waiting ${Math.round(delayMs / 1000)}s before refreshing next account...`)
+                await new Promise(r => setTimeout(r, delayMs))
             }
 
             const isValid = await this.refreshSession(account.id)
 
             if (!isValid) {
+                // 彻底清除已经失效的 Cookie 文件
+                accountManager.clearCookies(account.id)
                 // 更新账号状态
                 accountManager.updateAccount(account.id, { isActive: false })
 

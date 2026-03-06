@@ -1,4 +1,4 @@
-import { Browser, Page } from 'playwright';
+import { Browser, Page } from 'patchright';
 import { Account, accountManager } from '../auth/accountManager';
 import { broadcast, WsMessage, activeScans } from './server';
 import { BrowserManager } from '../browser/browserManager';
@@ -55,6 +55,10 @@ export async function startScan(accountId: string): Promise<void> {
     ctx.browserManager = BrowserManager.getInstance(accountId);
     ctx.pageLease = await ctx.browserManager.acquirePage(accountId, { skipValidation: true });
     ctx.page = ctx.pageLease.page;
+
+    if (!ctx.page) {
+      throw new Error('[scanner] Page not initialized')
+    }
 
     // Navigate to explore page
     logger.info('[scanner] Navigating to xiaohongshu.com/explore ...');

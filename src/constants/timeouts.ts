@@ -15,7 +15,7 @@ export const MONITOR_INTERVAL = {
   ACCOUNT_HEALTH: 10 * 60 * 1000, // 10分钟
   SUBSCRIPTION: 5 * 60 * 1000, // 5分钟
   HEARTBEAT: 60 * 1000, // 60秒
-  SESSION_HEARTBEAT: 10 * 60 * 1000, // 10分钟（Session 保活）
+  SESSION_HEARTBEAT: 20 * 60 * 1000, // 20分钟（Session 保活，降低频率减少风控触发）
 } as const
 
 // Session 检查缓存

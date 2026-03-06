@@ -1,4 +1,4 @@
-import { Browser, BrowserContext, chromium, Cookie, Page } from 'playwright';
+import { Browser, BrowserContext, chromium, Cookie, Page } from 'patchright';
 import { CookieManager } from './cookieManager';
 import { AccountManager, accountManager } from './accountManager';
 import * as dotenv from 'dotenv';

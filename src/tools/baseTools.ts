@@ -1,4 +1,4 @@
-import { Page, Locator } from 'playwright'
+import { Page, Locator } from 'patchright'
 import logger from '../utils/logger'
 import { BrowserManager, PageLease } from '../browser/browserManager'
 import { SELECTORS } from '../selectors'
@@ -27,6 +27,52 @@ export abstract class BaseTools {
     const delay = Math.random() * (max - min) + min
     logger.debug(`Adding random delay of ${delay.toFixed(2)} seconds`)
     await new Promise((resolve) => setTimeout(resolve, delay * 1000))
+  }
+
+  protected async simulateMouseMovement(page: Page): Promise<void> {
+    const viewport = page.viewportSize()
+    if (!viewport) return
+
+    for (let i = 0; i < 3; i++) {
+      const x = Math.floor(Math.random() * viewport.width)
+      const y = Math.floor(Math.random() * viewport.height)
+      try {
+        await page.mouse.move(x, y, { steps: Math.floor(Math.random() * 10) + 5 })
+      } catch (e) { }
+      await this.randomDelay(0.1, 0.3)
+    }
+  }
+
+  /**
+   * Navigate to a XHS URL in a human-like manner.
+   * 1. If the page is not already on xiaohongshu.com, warm it up by visiting the homepage first.
+   * 2. Add a random delay to simulate user thinking time.
+   * 3. Navigate using 'networkidle' (not 'domcontentloaded') for a more complete page load.
+   * 4. Check for captcha redirect after navigation.
+   */
+  protected async humanNavigate(page: Page, url: string, options?: { skipWarmup?: boolean }): Promise<void> {
+    const currentUrl = page.url()
+    const isOnXHS = currentUrl.includes('xiaohongshu.com') && !currentUrl.includes('about:blank')
+
+    // Warm up: visit homepage first if page is not already on XHS
+    if (!isOnXHS && !options?.skipWarmup) {
+      logger.info('[humanNavigate] Warming up page on XHS homepage first')
+      await page.goto('https://www.xiaohongshu.com', { waitUntil: 'networkidle', timeout: 30000 })
+      await this.simulateMouseMovement(page)
+      this.checkCaptchaRedirect(page)
+      // Simulate user browsing the homepage briefly
+      await this.randomDelay(1.5, 3)
+    }
+
+    // Random pre-navigation delay (user thinking time)
+    await this.simulateMouseMovement(page)
+    await this.randomDelay(0.5, 1.5)
+
+    // Navigate with referer from current XHS page
+    logger.info(`[humanNavigate] Navigating to: ${url.substring(0, 80)}`)
+    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000, referer: page.url() })
+    await this.simulateMouseMovement(page)
+    this.checkCaptchaRedirect(page)
   }
 
   protected async dismissTippyPopups(): Promise<void> {
@@ -103,13 +149,18 @@ export abstract class BaseTools {
 
   /**
    * Check if the current page has been redirected to a captcha/anti-bot page.
-   * If so, throw an error telling the Agent to re-login.
+   * If so, throw an error telling the Agent to pause this account.
    */
   protected checkCaptchaRedirect(page: Page): void {
     const url = page.url()
-    if (url.includes('/website-login/captcha') || url.includes('verifyType=')) {
+    const isCaptchaUrl =
+      /\/website-login\/captcha\b/.test(url) ||
+      (/[?&]verifyType=/.test(url) && /(website-login|captcha)/.test(url))
+    if (isCaptchaUrl) {
       throw new Error(
-        '当前会话已被小红书风控拦截，请先调用 login 工具重新登录后再试。'
+        `⚠️ 该账号已被小红书风控拦截（需要验证码验证）。` +
+        `请立即停止对该账号的所有操作，不要重试。` +
+        `用户需要通过 VNC (noVNC 端口 6080) 或小红书 APP 手动完成验证后才能继续使用该账号。`
       )
     }
   }

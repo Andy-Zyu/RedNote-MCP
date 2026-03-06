@@ -1,4 +1,4 @@
-import { Page, Response } from 'playwright'
+import { Page, Response } from 'patchright'
 import logger from '../utils/logger'
 
 export interface InterceptResult<T> {
@@ -11,7 +11,7 @@ export abstract class BaseInterceptor<T> {
   protected readonly page: Page
   protected readonly timeoutMs: number
 
-  constructor(page: Page, timeoutMs: number = 15000) {
+  constructor(page: Page, timeoutMs: number = 30000) {
     this.page = page
     this.timeoutMs = timeoutMs
   }
@@ -44,7 +44,23 @@ export abstract class BaseInterceptor<T> {
       }
     }
 
-    return new Promise<InterceptResult<T>>((resolve) => {
+    /** Check if the page has been redirected to a captcha/risk-control page */
+    const checkCaptcha = (): string | null => {
+      try {
+        const url = this.page.url()
+        const isCaptchaUrl =
+          /\/website-login\/captcha\b/.test(url) ||
+          (/[?&]verifyType=/.test(url) && /(website-login|captcha)/.test(url))
+        if (isCaptchaUrl) {
+          return `⚠️ 该账号已被小红书风控拦截（需要验证码验证）。` +
+            `请立即停止对该账号的所有操作，不要重试。` +
+            `用户需要通过 VNC (noVNC 端口 6080) 或小红书 APP 手动完成验证后才能继续使用该账号。`
+        }
+      } catch { /* page may be closed */ }
+      return null
+    }
+
+    return new Promise<InterceptResult<T>>((resolve, reject) => {
       handler = async (response: Response) => {
         if (settled) return
         if (response.status() !== 200) return
@@ -75,6 +91,14 @@ export abstract class BaseInterceptor<T> {
         if (settled) return
         settled = true
         cleanup()
+
+        // Check for captcha BEFORE falling back to DOM
+        const captchaMsg = checkCaptcha()
+        if (captchaMsg) {
+          reject(new Error(captchaMsg))
+          return
+        }
+
         logger.info('API intercept timed out, falling back to DOM extraction')
         try {
           const data = await this.fallbackDom()
@@ -87,6 +111,16 @@ export abstract class BaseInterceptor<T> {
 
       triggerAction().catch((actionError) => {
         if (settled) return
+
+        // Check for captcha — reject with clear message instead of swallowing
+        const captchaMsg = checkCaptcha()
+        if (captchaMsg) {
+          settled = true
+          cleanup()
+          reject(new Error(captchaMsg))
+          return
+        }
+
         settled = true
         cleanup()
         logger.error('Trigger action failed:', actionError)

@@ -1,6 +1,5 @@
 import logger from '../utils/logger';
 import { accountManager } from '../auth/accountManager';
-import { RedNoteTools } from '../tools/rednoteTools';
 import { BaseMonitor } from './baseMonitor';
 import { MONITOR_INTERVAL } from '../constants/timeouts';
 
@@ -17,12 +16,10 @@ export class AccountHealthMonitor extends BaseMonitor {
   protected readonly CHECK_INTERVAL = MONITOR_INTERVAL.ACCOUNT_HEALTH;
   protected readonly monitorName = 'AccountHealthMonitor';
 
-  private redNoteTools: RedNoteTools;
   private onHealthChange: HealthChangeCallback | null = null;
 
   constructor() {
     super();
-    this.redNoteTools = new RedNoteTools();
     logger.info('AccountHealthMonitor initialized');
   }
 
@@ -55,11 +52,8 @@ export class AccountHealthMonitor extends BaseMonitor {
         return false;
       }
 
-      // 使用轻量级接口检查账号状态
-      // 尝试获取"我的笔记"，如果成功则说明账号活跃
-      const notes = await this.redNoteTools.searchNotes('', 1, accountId);
-
-      // 如果能成功调用接口（即使返回0条），也认为账号是活跃的
+      // 不主动发起搜索请求，避免健康检查触发平台风控
+      // 有 Cookie 即判定为活跃，真实可用性由业务调用时再校验
       logger.info(`Account ${accountId} is active`);
       return true;
     } catch (error) {

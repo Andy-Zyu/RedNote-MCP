@@ -1,4 +1,4 @@
-import { Page } from 'playwright'
+import { Page } from 'patchright'
 import { BaseInterceptor } from './baseInterceptor'
 import { ContentAnalytics } from '../tools/types'
 import logger from '../utils/logger'

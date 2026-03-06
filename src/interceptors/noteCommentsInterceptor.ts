@@ -1,10 +1,10 @@
-import { Page } from 'playwright'
+import { Page } from 'patchright'
 import { BaseInterceptor } from './baseInterceptor'
 import { Comment } from '../tools/types'
 import logger from '../utils/logger'
 
 export class NoteCommentsInterceptor extends BaseInterceptor<Comment[]> {
-  constructor(page: Page, timeoutMs: number = 15000) {
+  constructor(page: Page, timeoutMs: number = 30000) {
     super(page, timeoutMs)
   }
 

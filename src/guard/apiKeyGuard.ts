@@ -84,7 +84,7 @@ export class ApiKeyGuard {
     logger.debug('[PigBun AI] Signature verification:', {
       match: signature === expectedSignature,
       secretSource: process.env.PIGBUN_SIGNATURE_SECRET ? 'PIGBUN_SIGNATURE_SECRET' :
-                    process.env.JWT_SECRET ? 'JWT_SECRET' : 'fallback'
+        process.env.JWT_SECRET ? 'JWT_SECRET' : 'fallback'
     })
 
     return signature === expectedSignature
@@ -133,7 +133,8 @@ export class ApiKeyGuard {
     // 强制刷新时跳过所有缓存
     if (forceRefresh) {
       logger.info('[PigBun AI] Force refresh enabled, skipping cache')
-      return await this.fetchFromNetwork(toolName)
+      const networkConfig = await this.fetchFromNetwork(toolName)
+      return networkConfig || this.getDegradedConfig()
     }
 
     // 1. 检查内存缓存

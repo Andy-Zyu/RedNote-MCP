@@ -38,7 +38,7 @@ esbuild.build({
   banner: {
     js: '// PigBun AI - pigbun-rednote-mcp\n// https://pigbunai.com',
   },
-  external: ['playwright'],
+  external: ['patchright', 'patchright-core', 'chromium-bidi'],
   legalComments: 'none',
 }).then(() => {
   console.log('✅ Bundle + minify done → dist/cli.js');
@@ -65,7 +65,7 @@ esbuild.build({
   banner: {
     js: '// PigBun AI - pigbun-rednote-mcp (OpenClaw Plugin)\n// https://pigbunai.com',
   },
-  external: ['playwright', '@sinclair/typebox'],
+  external: ['patchright', 'patchright-core', 'chromium-bidi', '@sinclair/typebox'],
   legalComments: 'none',
 }).then(() => {
   console.log('✅ Bundle + minify done → dist/openclaw/index.js');
