@@ -207,6 +207,60 @@ export async function startMatrixServer(port: number = 3001): Promise<http.Serve
     }
   });
 
+  // Inspect API - Open visible browser manually
+  app.post('/api/accounts/:id/inspect', authMiddleware, async (req, res) => {
+    const id = extractParam(req.params.id);
+    logger.info(`[Matrix API] POST /api/accounts/${id}/inspect - authorized`);
+    const account = accountManager.getAccount(id);
+    if (!account) {
+      res.status(404).json({ error: 'Account not found' });
+      return;
+    }
+
+    try {
+      const { chromium } = require('patchright');
+      const browser = await chromium.launch({ headless: false });
+      const context = await browser.newContext({ viewport: null });
+
+      const cookies = await accountManager.getCookies(id);
+      if (cookies && cookies.length > 0) {
+        await context.addCookies(cookies);
+      }
+
+      const page = await context.newPage();
+      await page.goto('https://www.xiaohongshu.com/explore', { waitUntil: 'domcontentloaded' });
+
+      // Keep syncing cookies in the background every 10 seconds just in case user logs in or solves captcha
+      const syncInterval = setInterval(async () => {
+        try {
+          const currentCookies = await context.cookies();
+          if (currentCookies.length > 0) {
+            await accountManager.saveCookies(id, currentCookies);
+            accountManager.updateAccount(id, { isActive: true, lastActiveTime: new Date().toISOString() });
+          }
+        } catch (e) { }
+      }, 10000);
+
+      browser.on('disconnected', () => {
+        clearInterval(syncInterval);
+        logger.info(`[Matrix API] Inspect browser for account ${id} closed by user`);
+        broadcast({
+          type: 'accounts',
+          accounts: accountManager.listAccounts().map(a => ({
+            ...a,
+            hasCookies: accountManager.hasCookies(a.id),
+          })),
+        });
+      });
+
+      res.json({ ok: true, status: 'inspecting' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('[Matrix API] Inspect error:', error);
+      res.status(500).json({ error: message });
+    }
+  });
+
   // Scan API - Protected by auth middleware
   app.post('/api/scan/:accountId', authMiddleware, async (req, res) => {
     const accountId = extractParam(req.params.accountId);

@@ -172,7 +172,7 @@ function ScanModal({ accountId, accountName, onClose }) {
 }
 
 // 账号卡片组件
-function AccountCard({ account, onRename, onDelete, onSetDefault, onScan, onRelogin }) {
+function AccountCard({ account, onRename, onDelete, onSetDefault, onScan, onRelogin, onInspect }) {
   const [isEditing, setIsEditing] = useState(false);
   const [newName, setNewName] = useState(account.name);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -252,6 +252,14 @@ function AccountCard({ account, onRename, onDelete, onSetDefault, onScan, onRelo
             className="px-4 py-2 bg-sky border-[3px] border-dark text-dark text-sm rounded-lg font-black hover:shadow-brutal-sm hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all"
           >
             重新登录
+          </button>
+        )}
+        {account.hasCookies && (
+          <button
+            onClick={() => onInspect(account.id)}
+            className="px-4 py-2 bg-mint/50 border-[3px] border-dark text-dark text-sm rounded-lg font-black hover:shadow-brutal-sm hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all"
+          >
+            打开浏览器
           </button>
         )}
         <button
@@ -381,6 +389,16 @@ function App() {
     }
   };
 
+  const handleInspect = async (id) => {
+    try {
+      showToast('正在启动浏览器实例，请稍候...', 'info');
+      await apiCall(`/api/accounts/${id}/inspect`, { method: 'POST' });
+      showToast('浏览器实例已启动！', 'success');
+    } catch (err) {
+      showToast(`启动浏览器失败: ${err.message}`, 'error');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg">
@@ -467,6 +485,7 @@ function App() {
                 onSetDefault={handleSetDefault}
                 onScan={handleScan}
                 onRelogin={handleRelogin}
+                onInspect={handleInspect}
               />
             ))}
           </div>
