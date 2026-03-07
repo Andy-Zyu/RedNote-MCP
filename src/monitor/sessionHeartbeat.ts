@@ -36,6 +36,31 @@ export class SessionHeartbeat extends BaseMonitor {
     }
 
     /**
+     * 辅助方法：模拟鼠标随机移动
+     */
+    private async simulateMouseMovement(page: any): Promise<void> {
+        const viewport = page.viewportSize()
+        if (!viewport) return
+
+        const steps = 5 + Math.floor(Math.random() * 5) // 5 to 10 steps
+        let currentX = viewport.width / 2
+        let currentY = viewport.height / 2
+
+        for (let i = 0; i < steps; i++) {
+            // Random movement within a reasonable radius
+            currentX += (Math.random() - 0.5) * 200
+            currentY += (Math.random() - 0.5) * 200
+
+            // Keep within bounds
+            currentX = Math.max(10, Math.min(currentX, viewport.width - 10))
+            currentY = Math.max(10, Math.min(currentY, viewport.height - 10))
+
+            await page.mouse.move(currentX, currentY, { steps: 2 + Math.floor(Math.random() * 5) })
+            await page.waitForTimeout(50 + Math.random() * 200)
+        }
+    }
+
+    /**
      * 刷新单个账号的 session
      * 访问主页，检查登录状态，保存最新 cookies
      * @returns true=session有效, false=session已过期
@@ -47,6 +72,26 @@ export class SessionHeartbeat extends BaseMonitor {
         if (!accountManager.hasCookies(accountId)) {
             logger.warn(`[SessionHeartbeat] Account ${accountId} has no cookies, skipping`)
             return false
+        }
+
+        // ======================================
+        // 高阶保活机制 1：生物钟与随机怠惰 (Circadian Rhythm & Daytime Jitter)
+        // ======================================
+        const now = new Date()
+        const hour = now.getHours()
+
+        // 凌晨 2:00 ~ 7:00 (人类睡眠周期) - 80% 概率直接跳过本次心跳
+        if (hour >= 2 && hour <= 7) {
+            if (Math.random() < 0.8) {
+                logger.info(`[SessionHeartbeat] Skipping account ${accountId}: Sleep cycle (80% chance triggered)`)
+                return true // 假装成功，不判定为过期，只是今天在这刻不刷小红书了
+            }
+        } else {
+            // 白天正常时间 - 30% 概率偷懒，打乱 20 分钟一刷的机器人规律
+            if (Math.random() < 0.3) {
+                logger.info(`[SessionHeartbeat] Skipping account ${accountId}: Daytime jitter (30% chance triggered)`)
+                return true
+            }
         }
 
         const bm = BrowserManager.getInstance(accountId)
@@ -62,10 +107,37 @@ export class SessionHeartbeat extends BaseMonitor {
                 timeout: 30000,
             })
 
-            // 等待页面加载
+            // 等待页面初步加载
             await page.waitForTimeout(3000)
 
-            // 检查是否登录成功
+            // ======================================
+            // 高阶保活机制 2：人类级信息流滚动与停顿 (Feed Interaction)
+            // ======================================
+            try {
+                // 模拟鼠标在屏幕上随机晃动
+                await this.simulateMouseMovement(page)
+
+                // 决定今天的心情：往下刷 2 到 4 屏
+                const scrolls = 2 + Math.floor(Math.random() * 3)
+                logger.info(`[SessionHeartbeat] Simulating ${scrolls} human-like feed scrolls for ${accountId}`)
+
+                for (let i = 0; i < scrolls; i++) {
+                    // 每次向下滚动 600 ~ 1200 像素
+                    const scrollAmount = 600 + Math.floor(Math.random() * 600)
+                    await page.mouse.wheel(0, scrollAmount)
+
+                    // 模拟鼠标移动（假装在看图或者找感兴趣的笔记）
+                    await this.simulateMouseMovement(page)
+
+                    // 在这个位置停顿阅读 1.5 秒 ~ 4 秒
+                    const readTime = 1500 + Math.floor(Math.random() * 2500)
+                    await page.waitForTimeout(readTime)
+                }
+            } catch (err) {
+                logger.warn(`[SessionHeartbeat] Feed simulation error for ${accountId} (ignored):`, err)
+            }
+
+            // 检查是否登录成功 (寻找侧边栏的“我”)
             const isLoggedIn = await page.evaluate((sidebarSel: string) => {
                 const sidebar = document.querySelector(sidebarSel)
                 return sidebar?.textContent?.trim() === '我'
