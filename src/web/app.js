@@ -20,7 +20,8 @@ const api = {
   setDefault: (id) => fetch(`${API_BASE}/accounts/${id}/default`, { method: 'POST' }).then(r => r.json()),
   startScan: (id) => fetch(`${API_BASE}/scan/${id}`, { method: 'POST' }).then(r => r.json()),
   abortScan: (id) => fetch(`${API_BASE}/scan/${id}/abort`, { method: 'POST' }).then(r => r.json()),
-  relogin: (id) => fetch(`${API_BASE}/accounts/${id}/relogin`, { method: 'POST' }).then(r => r.json())
+  relogin: (id) => fetch(`${API_BASE}/accounts/${id}/relogin`, { method: 'POST' }).then(r => r.json()),
+  inspectAccount: (id) => fetch(`${API_BASE}/accounts/${id}/inspect`, { method: 'POST' }).then(r => r.json())
 };
 
 // WebSocket Hook
@@ -392,7 +393,7 @@ function App() {
   const handleInspect = async (id) => {
     try {
       showToast('正在启动浏览器实例，请稍候...', 'info');
-      await apiCall(`/api/accounts/${id}/inspect`, { method: 'POST' });
+      await api.inspectAccount(id);
       showToast('浏览器实例已启动！', 'success');
     } catch (err) {
       showToast(`启动浏览器失败: ${err.message}`, 'error');
