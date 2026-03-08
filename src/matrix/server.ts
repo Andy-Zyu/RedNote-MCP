@@ -219,8 +219,23 @@ export async function startMatrixServer(port: number = 3001): Promise<http.Serve
 
     try {
       const { chromium } = require('patchright');
-      const browser = await chromium.launch({ headless: false });
+      const browser = await chromium.launch({
+        headless: false,
+        args: [
+          '--disable-blink-features=AutomationControlled',
+          '--disable-infobars',
+        ],
+        ignoreDefaultArgs: ['--enable-automation']
+      });
       const context = await browser.newContext({ viewport: null });
+
+      // Apply critical stealth scripts to hide playwright
+      await context.addInitScript(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        if (!(window as any).chrome) {
+          (window as any).chrome = {};
+        }
+      });
 
       const cookies = await accountManager.getCookies(id);
       if (cookies && cookies.length > 0) {
